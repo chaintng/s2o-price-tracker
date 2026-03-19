@@ -263,7 +263,7 @@ export default function App() {
               <section className="market-section">
                 <div className="flex flex-col gap-2 px-4 py-3 sm:px-5">
                   <p className="market-kicker">Technical chart · 10m bars</p>
-                  <div className="legend-row">
+                  <div className="legend-row hidden">
                     {marketOverviewSeries.map((series) => (
                       <span key={ticketKey(series.key)} className="legend-chip">
                         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: series.color }} />
