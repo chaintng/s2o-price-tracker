@@ -191,17 +191,17 @@ export default function App() {
               )}
 
               <section className="market-list-wrap">
-                <div className="market-list-head">
-                  <span>Symbol</span>
-                  <span className="text-right">Last Price</span>
-                  <span className="text-right">Change</span>
-                </div>
                 <div>
                   {TICKET_SECTIONS.map((section, sectionIndex) => (
                     <div
                       key={section.level}
                     >
-                      <div className="market-section-label">{section.label}</div>
+                      <div className="market-section-label">
+                        <span>{section.label}</span>
+                        <span className="text-right">Last Price</span>
+                        <span className="text-right">Volume</span>
+                        <span className="text-right">Change</span>
+                      </div>
                       <div className="divide-y divide-[#1f2630]">
                         {orderedTicketStates
                           .filter(({ key }) => key.level === section.level)
@@ -235,6 +235,14 @@ export default function App() {
                                       }`}
                                   >
                                     {summary ? formatPrice(summary.latestPrice) : "N/A"}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p
+                                    className={`text-sm font-medium ${summary ? "text-[#f0f4f8]" : "text-[#5f6b7a]"
+                                      }`}
+                                  >
+                                    {summary ? summary.latestVolume?.toLocaleString() ?? "N/A" : "N/A"}
                                   </p>
                                 </div>
                                 <div className="text-right">
@@ -391,12 +399,14 @@ export default function App() {
 
                     <div className="grid max-w-full flex-shrink-0 grid-cols-2 gap-x-5 gap-y-2 text-sm">
                       <div>
-                        <p className="market-stat-label">Avg</p>
-                        <p className="market-stat-value">{formatPrice(focusOverview.averagePrice)}</p>
+                        <p className="market-stat-label">Volume</p>
+                        <p className="market-stat-value">
+                          {activeSummary?.latestVolume?.toLocaleString() ?? "—"}
+                        </p>
                       </div>
                       <div>
-                        <p className="market-stat-label">Volume</p>
-                        <p className="market-stat-value">{focusOverview.totalVolume.toLocaleString()}</p>
+                        <p className="market-stat-label">Avg</p>
+                        <p className="market-stat-value">{formatPrice(focusOverview.averagePrice)}</p>
                       </div>
                       <div>
                         <p className="market-stat-label">High</p>
@@ -527,12 +537,14 @@ export default function App() {
 
                 <div className="grid flex-shrink-0 grid-cols-2 gap-x-5 gap-y-2 text-sm">
                   <div>
-                    <p className="market-stat-label">Avg</p>
-                    <p className="market-stat-value">{formatPrice(focusOverview.averagePrice)}</p>
+                    <p className="market-stat-label">Volume</p>
+                    <p className="market-stat-value">
+                      {activeSummary?.latestVolume?.toLocaleString() ?? "—"}
+                    </p>
                   </div>
                   <div>
-                    <p className="market-stat-label">Volume</p>
-                    <p className="market-stat-value">{focusOverview.totalVolume.toLocaleString()}</p>
+                    <p className="market-stat-label">Avg</p>
+                    <p className="market-stat-value">{formatPrice(focusOverview.averagePrice)}</p>
                   </div>
                   <div>
                     <p className="market-stat-label">High</p>
@@ -593,7 +605,7 @@ export default function App() {
               </a>
             </section>
 
-            <footer className="market-footer gap-2">
+            <footer className="market-footer hidden gap-2 sm:flex lg:hidden">
               <span className="footer-disclaimer">{footerDisclaimer}</span>
               <span className="items-center gap-1">
                 <span>Built with 💚 by </span>
