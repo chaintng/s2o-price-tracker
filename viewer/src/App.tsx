@@ -198,8 +198,8 @@ export default function App() {
                     >
                       <div className="market-section-label">
                         <span>{section.label}</span>
-                        <span className="text-right">Last Price</span>
-                        <span className="text-right">Volume</span>
+                        <span className="text-right">Last</span>
+                        <span className="text-right">Vol</span>
                         <span className="text-right">Change</span>
                       </div>
                       <div className="divide-y divide-[#1f2630]">
