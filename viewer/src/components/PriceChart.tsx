@@ -1,200 +1,344 @@
 import * as echarts from "echarts/core";
-import { CandlestickChart, BarChart } from "echarts/charts";
+import { BarChart, CandlestickChart, LineChart } from "echarts/charts";
 import {
+  AxisPointerComponent,
+  DataZoomComponent,
   GridComponent,
   TooltipComponent,
-  DataZoomComponent,
-  MarkLineComponent,
 } from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
-import { useEffect, useRef } from "react";
 import type { ComposeOption } from "echarts/core";
-import type { CandlestickSeriesOption, BarSeriesOption } from "echarts/charts";
+import type { BarSeriesOption, CandlestickSeriesOption, LineSeriesOption } from "echarts/charts";
 import type {
+  AxisPointerComponentOption,
+  DataZoomComponentOption,
   GridComponentOption,
   TooltipComponentOption,
-  DataZoomComponentOption,
 } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
+import { useEffect, useRef, useState } from "react";
 import { formatAxisTime } from "../lib/ohlc";
-import { Interval, OHLCPoint, TicketKey } from "../types";
+import { ChartMode, Interval, LinePoint, OHLCPoint, TicketKey, ticketLabel } from "../types";
 
 echarts.use([
+  LineChart,
   CandlestickChart,
   BarChart,
   GridComponent,
   TooltipComponent,
+  AxisPointerComponent,
   DataZoomComponent,
-  MarkLineComponent,
   CanvasRenderer,
 ]);
 
 type ECOption = ComposeOption<
+  | LineSeriesOption
   | CandlestickSeriesOption
   | BarSeriesOption
   | GridComponentOption
   | TooltipComponentOption
+  | AxisPointerComponentOption
   | DataZoomComponentOption
 >;
 
-interface Props {
-  data: OHLCPoint[];
-  selected: TicketKey;
-  interval: Interval;
-  loading: boolean;
+interface SeriesData {
+  key: TicketKey;
+  color: string;
+  points: LinePoint[];
 }
 
-const BULL = "#26a69a";
-const BEAR = "#ef5350";
-const BORDER_COLOR = "#2a2e39";
-const TEXT_COLOR = "#787b86";
-const GRID_COLOR = "#1e2030";
-const BG_TOOLTIP = "#1a1d26";
+interface Props {
+  mode: ChartMode;
+  interval: Interval;
+  loading: boolean;
+  visibleSeries: SeriesData[];
+  activeTicket: TicketKey | null;
+  activeLinePoints: LinePoint[];
+  activeCandles: OHLCPoint[];
+  heightClassName?: string;
+}
 
-function buildOption(data: OHLCPoint[], interval: Interval): ECOption {
-  const times = data.map((d) => formatAxisTime(d.time, interval));
-  // ECharts candlestick: [open, close, low, high]
-  const candleData = data.map((d) => [d.open, d.close, d.low, d.high]);
-  const volumeData = data.map((d, i) => ({
-    value: d.volume,
-    itemStyle: {
-      color: d.close >= d.open ? `${BULL}cc` : `${BEAR}cc`,
-    },
-    i,
-  }));
+const CHART_BG = "transparent";
+const GRID = "#243149";
+const TEXT = "#9fb0cb";
+const BORDER = "#22304a";
+const TOOLTIP_BG = "#081120";
+
+function formatPrice(price: number): string {
+  return `฿${price.toLocaleString()}`;
+}
+
+function buildLineOption(
+  visibleSeries: SeriesData[],
+  activeTicket: TicketKey | null,
+  activeLinePoints: LinePoint[],
+  interval: Interval
+): ECOption {
+  const showVolume = activeTicket !== null && activeLinePoints.length > 0;
 
   return {
-    animation: true,
-    animationDuration: 400,
+    backgroundColor: CHART_BG,
+    animationDuration: 700,
+    animationDurationUpdate: 350,
     animationEasing: "cubicOut",
-    backgroundColor: "transparent",
+    grid: showVolume
+      ? [
+        { left: 56, right: 18, top: 24, height: "60%" },
+        { left: 56, right: 18, top: "74%", bottom: 38 },
+      ]
+      : [{ left: 56, right: 18, top: 24, bottom: 36 }],
     tooltip: {
       trigger: "axis",
+      appendToBody: true,
+      confine: false,
       axisPointer: {
-        type: "cross",
-        lineStyle: { color: "#444c61", width: 1 },
-        crossStyle: { color: "#444c61", width: 1 },
+        type: "line",
+        lineStyle: { color: "#36507c", width: 1 },
       },
-      backgroundColor: BG_TOOLTIP,
-      borderColor: BORDER_COLOR,
+      backgroundColor: TOOLTIP_BG,
+      borderColor: BORDER,
       borderWidth: 1,
-      padding: 12,
-      textStyle: { color: "#d1d4dc", fontSize: 12 },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      formatter: (params: any) => {
-        const candle = Array.isArray(params)
-          ? params.find((p: { seriesType: string }) => p.seriesType === "candlestick")
-          : null;
-        const vol = Array.isArray(params)
-          ? params.find((p: { seriesType: string }) => p.seriesType === "bar")
-          : null;
-        if (!candle) return "";
+      textStyle: { color: "#ecf4ff", fontSize: 12 },
+      extraCssText: "border-radius: 16px; box-shadow: 0 20px 45px rgba(0,0,0,0.3);",
+      formatter: (params) => {
+        const list = Array.isArray(params) ? params : [params];
+        if (list.length === 0) {
+          return "";
+        }
 
-        const [o, c, l, h] = candle.data as [number, number, number, number];
-        const isUp = c >= o;
-        const color = isUp ? BULL : BEAR;
-        const pct = o !== 0 ? (((c - o) / o) * 100).toFixed(2) : "0.00";
-        const fmt = (n: number) => `฿${n.toLocaleString()}`;
+        const title = String(list[0].name ?? "");
+        const rows = list
+          .filter((item) => item.seriesName !== "Focused volume")
+          .map((item) => {
+            const value = Array.isArray(item.value) ? item.value[1] : item.value;
+            const label = item.seriesName;
+            return `<div style="display:flex;justify-content:space-between;gap:24px">
+              <span style="color:${item.color};font-weight:600">${label}</span>
+              <span>${formatPrice(Number(value))}</span>
+            </div>`;
+          })
+          .join("");
 
-        const row = (label: string, val: string) =>
-          `<div style="display:flex;justify-content:space-between;gap:24px">` +
-          `<span style="color:${TEXT_COLOR}">${label}</span>` +
-          `<span style="color:${color};font-weight:600">${val}</span></div>`;
-
-        return (
-          `<div style="font-size:11px;line-height:1.7">` +
-          `<div style="color:${TEXT_COLOR};margin-bottom:4px;font-size:10px">${candle.name}</div>` +
-          row("O", fmt(o)) +
-          row("H", fmt(h)) +
-          row("L", fmt(l)) +
-          row("C", fmt(c)) +
-          (vol
-            ? `<div style="display:flex;justify-content:space-between;gap:24px;margin-top:4px">` +
-              `<span style="color:${TEXT_COLOR}">Vol</span>` +
-              `<span style="color:${TEXT_COLOR}">${vol.data.value}</span></div>`
-            : "") +
-          `<div style="color:${color};text-align:right;margin-top:4px;font-size:11px">` +
-          `${isUp ? "+" : ""}${pct}%</div>` +
-          `</div>`
-        );
+        return `<div style="display:flex;flex-direction:column;gap:8px;min-width:220px">
+          <div style="color:${TEXT};font-size:11px">${title}</div>
+          ${rows}
+        </div>`;
       },
     },
-    grid: [
-      { left: 64, right: 12, top: 16, bottom: 110 },
-      { left: 64, right: 12, top: "74%", bottom: 64 },
+    xAxis: showVolume
+      ? [
+        {
+          type: "time",
+          gridIndex: 0,
+          axisLine: { lineStyle: { color: BORDER } },
+          axisLabel: { show: false },
+          splitLine: { show: false },
+        },
+        {
+          type: "time",
+          gridIndex: 1,
+          axisLine: { lineStyle: { color: BORDER } },
+          axisLabel: {
+            color: TEXT,
+            fontSize: 10,
+            hideOverlap: true,
+            margin: 10,
+            formatter: (value: number) => formatAxisTime(new Date(value).toISOString(), interval),
+          },
+          splitLine: { show: false },
+        },
+      ]
+      : [
+        {
+          type: "time",
+          gridIndex: 0,
+          axisLine: { lineStyle: { color: BORDER } },
+            axisLabel: {
+              color: TEXT,
+              fontSize: 10,
+              hideOverlap: true,
+              margin: 10,
+              formatter: (value: number) => formatAxisTime(new Date(value).toISOString(), interval),
+            },
+          splitLine: { show: false },
+        },
+      ],
+    yAxis: showVolume
+      ? [
+        {
+          type: "value",
+          gridIndex: 0,
+          scale: true,
+          axisLabel: {
+            color: TEXT,
+            formatter: (value: number) => formatPrice(value),
+          },
+          splitLine: { lineStyle: { color: GRID, type: "dashed" } },
+        },
+        {
+          type: "value",
+          gridIndex: 1,
+          axisLabel: { color: TEXT },
+          splitLine: { show: false },
+        },
+      ]
+      : [
+        {
+          type: "value",
+          gridIndex: 0,
+          scale: true,
+          axisLabel: {
+            color: TEXT,
+            formatter: (value: number) => formatPrice(value),
+          },
+          splitLine: { lineStyle: { color: GRID, type: "dashed" } },
+        },
+      ],
+    dataZoom: [
+      {
+        type: "inside",
+        xAxisIndex: showVolume ? [0, 1] : [0],
+        filterMode: "none",
+      },
     ],
+    series: [
+      ...visibleSeries.map<LineSeriesOption>((series) => ({
+        name: ticketLabel(series.key),
+        type: "line",
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        showSymbol: false,
+        smooth: 0.22,
+        lineStyle: {
+          width: activeTicket && ticketLabel(activeTicket) === ticketLabel(series.key) ? 3.5 : 2.25,
+          color: series.color,
+          opacity: activeTicket && ticketLabel(activeTicket) !== ticketLabel(series.key) ? 0.55 : 1,
+        },
+        emphasis: { focus: "series" },
+        itemStyle: { color: series.color },
+        areaStyle:
+          activeTicket && ticketLabel(activeTicket) === ticketLabel(series.key)
+            ? {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: `${series.color}55` },
+                { offset: 1, color: `${series.color}00` },
+              ]),
+            }
+            : undefined,
+        data: series.points.map((point) => [point.time, point.price]),
+      })),
+      ...(showVolume
+        ? [
+          {
+            name: "Focused volume",
+            type: "bar" as const,
+            xAxisIndex: 1,
+            yAxisIndex: 1,
+            barMaxWidth: 18,
+            silent: true,
+            itemStyle: {
+              color: activeTicket ? "#7dd3fc99" : "#64748b80",
+              borderRadius: [4, 4, 0, 0],
+            },
+            data: activeLinePoints.map((point) => [point.time, point.volume]),
+          },
+        ]
+        : []),
+    ],
+  };
+}
+
+function buildCandlestickOption(
+  candles: OHLCPoint[],
+  activeTicket: TicketKey | null,
+  interval: Interval
+): ECOption {
+  const categories = candles.map((point) => formatAxisTime(point.time, interval));
+
+  return {
+    backgroundColor: CHART_BG,
+    animationDuration: 600,
+    animationDurationUpdate: 300,
+    animationEasing: "cubicOut",
+    grid: [
+      { left: 56, right: 18, top: 24, height: "60%" },
+      { left: 56, right: 18, top: "74%", bottom: 38 },
+    ],
+    tooltip: {
+      trigger: "axis",
+      appendToBody: true,
+      confine: false,
+      axisPointer: {
+        type: "cross",
+        lineStyle: { color: "#36507c" },
+      },
+      backgroundColor: TOOLTIP_BG,
+      borderColor: BORDER,
+      borderWidth: 1,
+      textStyle: { color: "#ecf4ff", fontSize: 12 },
+      extraCssText: "border-radius: 16px; box-shadow: 0 20px 45px rgba(0,0,0,0.3);",
+      formatter: (params) => {
+        const list = Array.isArray(params) ? params : [params];
+        const candle = list.find((item) => item.seriesType === "candlestick");
+        const volume = list.find((item) => item.seriesType === "bar");
+        if (!candle || !Array.isArray(candle.data)) {
+          return "";
+        }
+
+        const [open, close, low, high] = candle.data as [number, number, number, number];
+        const volumeValue = Array.isArray(volume?.data) ? Number(volume.data[1]) : 0;
+
+        return `<div style="display:flex;flex-direction:column;gap:6px;min-width:220px">
+          <div style="color:${TEXT};font-size:11px">${String(candle.name ?? "")}</div>
+          <div style="display:flex;justify-content:space-between"><span>Ticket</span><span>${activeTicket ? ticketLabel(activeTicket) : "N/A"}</span></div>
+          <div style="display:flex;justify-content:space-between"><span>Open</span><span>${formatPrice(open)}</span></div>
+          <div style="display:flex;justify-content:space-between"><span>High</span><span>${formatPrice(high)}</span></div>
+          <div style="display:flex;justify-content:space-between"><span>Low</span><span>${formatPrice(low)}</span></div>
+          <div style="display:flex;justify-content:space-between"><span>Close</span><span>${formatPrice(close)}</span></div>
+          <div style="display:flex;justify-content:space-between"><span>Volume</span><span>${volumeValue.toLocaleString()}</span></div>
+        </div>`;
+      },
+    },
     xAxis: [
       {
         type: "category",
-        data: times,
+        data: categories,
         gridIndex: 0,
-        axisLine: { lineStyle: { color: BORDER_COLOR } },
-        axisTick: { show: false },
+        axisLine: { lineStyle: { color: BORDER } },
         axisLabel: { show: false },
-        splitLine: { show: false },
-        boundaryGap: true,
+        axisTick: { show: false },
       },
       {
         type: "category",
-        data: times,
+        data: categories,
         gridIndex: 1,
-        axisLine: { lineStyle: { color: BORDER_COLOR } },
+        axisLine: { lineStyle: { color: BORDER } },
         axisTick: { show: false },
-        axisLabel: {
-          color: TEXT_COLOR,
-          fontSize: 10,
-          interval: "auto",
-          rotate: 0,
-          margin: 8,
-        },
-        splitLine: { show: false },
-        boundaryGap: true,
+        axisLabel: { color: TEXT, fontSize: 11 },
       },
     ],
     yAxis: [
       {
+        type: "value",
         scale: true,
         gridIndex: 0,
         axisLabel: {
-          color: TEXT_COLOR,
-          fontSize: 10,
-          formatter: (v: number) => `฿${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`,
+          color: TEXT,
+          formatter: (value: number) => formatPrice(value),
         },
-        axisLine: { show: false },
-        axisTick: { show: false },
-        splitLine: { lineStyle: { color: GRID_COLOR, type: "dashed" } },
+        splitLine: { lineStyle: { color: GRID, type: "dashed" } },
       },
       {
+        type: "value",
         gridIndex: 1,
-        axisLabel: { color: TEXT_COLOR, fontSize: 10 },
-        axisLine: { show: false },
-        axisTick: { show: false },
+        axisLabel: { color: TEXT },
         splitLine: { show: false },
-        splitNumber: 2,
       },
     ],
     dataZoom: [
       {
         type: "inside",
         xAxisIndex: [0, 1],
-        start: data.length > 48 ? 70 : 0,
-        end: 100,
-        minValueSpan: 4,
-      },
-      {
-        type: "slider",
-        xAxisIndex: [0, 1],
-        bottom: 8,
-        height: 44,
-        borderColor: BORDER_COLOR,
-        fillerColor: "rgba(41,98,255,0.08)",
-        handleStyle: { color: "#2962ff", borderColor: "#2962ff" },
-        moveHandleStyle: { color: "#2962ff" },
-        selectedDataBackground: {
-          lineStyle: { color: "#2962ff" },
-          areaStyle: { color: "rgba(41,98,255,0.04)" },
-        },
-        textStyle: { color: TEXT_COLOR, fontSize: 10 },
-        brushSelect: false,
+        filterMode: "none",
       },
     ],
     series: [
@@ -203,23 +347,12 @@ function buildOption(data: OHLCPoint[], interval: Interval): ECOption {
         type: "candlestick",
         xAxisIndex: 0,
         yAxisIndex: 0,
-        data: candleData,
+        data: candles.map((point) => [point.open, point.close, point.low, point.high]),
         itemStyle: {
-          color: BULL,
-          color0: BEAR,
-          borderColor: BULL,
-          borderColor0: BEAR,
-          borderWidth: 1.5,
-        },
-        emphasis: {
-          itemStyle: {
-            color: BULL,
-            color0: BEAR,
-            borderColor: BULL,
-            borderColor0: BEAR,
-            shadowBlur: 8,
-            shadowColor: "rgba(41,98,255,0.3)",
-          },
+          color: "#36c78b",
+          color0: "#fb7185",
+          borderColor: "#36c78b",
+          borderColor0: "#fb7185",
         },
       },
       {
@@ -227,89 +360,149 @@ function buildOption(data: OHLCPoint[], interval: Interval): ECOption {
         type: "bar",
         xAxisIndex: 1,
         yAxisIndex: 1,
-        data: volumeData,
-        barMaxWidth: 20,
-        emphasis: { focus: "none" },
+        barMaxWidth: 18,
+        itemStyle: {
+          color: "#7dd3fc80",
+          borderRadius: [4, 4, 0, 0],
+        },
+        data: candles.map((point, index) => [categories[index], point.volume]),
       },
     ],
   };
 }
 
-function ticketLabel(t: TicketKey) {
-  const level = t.level === "vip" ? "VIP" : "Regular";
-  return `${level} · ${t.type}`;
-}
-
-export function PriceChart({ data, selected, interval, loading }: Props) {
+export function PriceChart({
+  mode,
+  interval,
+  loading,
+  visibleSeries,
+  activeTicket,
+  activeLinePoints,
+  activeCandles,
+  heightClassName = "h-[460px]",
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
+  const [zoomWindow, setZoomWindow] = useState({ start: 0, end: 100 });
 
-  // Init chart
+  const applyZoom = (start: number, end: number) => {
+    const nextStart = Math.max(0, Math.min(start, 95));
+    const nextEnd = Math.max(nextStart + 5, Math.min(end, 100));
+    setZoomWindow({ start: nextStart, end: nextEnd });
+    chartRef.current?.dispatchAction({
+      type: "dataZoom",
+      start: nextStart,
+      end: nextEnd,
+    });
+  };
+
+  const zoomIn = () => {
+    const span = zoomWindow.end - zoomWindow.start;
+    const nextSpan = Math.max(15, span - 15);
+    const center = zoomWindow.start + span / 2;
+    applyZoom(center - nextSpan / 2, center + nextSpan / 2);
+  };
+
+  const zoomOut = () => {
+    const span = zoomWindow.end - zoomWindow.start;
+    const nextSpan = Math.min(100, span + 15);
+    const center = zoomWindow.start + span / 2;
+    applyZoom(center - nextSpan / 2, center + nextSpan / 2);
+  };
+
   useEffect(() => {
-    if (!containerRef.current) return;
-    chartRef.current = echarts.init(containerRef.current, undefined, { renderer: "canvas" });
+    if (!containerRef.current) {
+      return;
+    }
 
-    const onResize = () => chartRef.current?.resize();
-    window.addEventListener("resize", onResize);
+    const chart = echarts.init(containerRef.current, undefined, { renderer: "canvas" });
+    chartRef.current = chart;
+
+    const resize = () => chart.resize();
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        chart.dispatchAction({ type: "hideTip" });
+      }
+    };
+
+    window.addEventListener("resize", resize);
+    document.addEventListener("mousedown", handlePointerDown);
 
     return () => {
-      window.removeEventListener("resize", onResize);
-      chartRef.current?.dispose();
+      window.removeEventListener("resize", resize);
+      document.removeEventListener("mousedown", handlePointerDown);
+      chart.dispose();
       chartRef.current = null;
     };
   }, []);
 
-  // Update data
   useEffect(() => {
-    if (!chartRef.current) return;
-    if (data.length === 0) {
+    if (!chartRef.current) {
+      return;
+    }
+
+    setZoomWindow({ start: 0, end: 100 });
+
+    if (mode === "candlestick") {
+      if (activeCandles.length === 0) {
+        chartRef.current.clear();
+        return;
+      }
+
+      chartRef.current.setOption(buildCandlestickOption(activeCandles, activeTicket, interval), {
+        notMerge: true,
+      });
+      return;
+    }
+
+    if (visibleSeries.length === 0) {
       chartRef.current.clear();
       return;
     }
-    chartRef.current.setOption(buildOption(data, interval), { notMerge: true, lazyUpdate: false });
-  }, [data, interval]);
+
+    chartRef.current.setOption(
+      buildLineOption(visibleSeries, activeTicket, activeLinePoints, interval),
+      {
+        notMerge: true,
+      }
+    );
+  }, [mode, interval, visibleSeries, activeTicket, activeLinePoints, activeCandles]);
+
+  const emptyState =
+    mode === "candlestick"
+      ? "No candle data for this ticket in the selected window."
+      : "No chart data for the selected filters.";
+
+  const hasData = mode === "candlestick" ? activeCandles.length > 0 : visibleSeries.length > 0;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 px-4 pt-3 pb-4">
-      {/* Chart label */}
-      <div className="flex items-center gap-2 mb-2">
-        <span
-          className={[
-            "text-[10px] font-bold rounded px-1.5 py-0.5",
-            selected.level === "vip"
-              ? "bg-yellow-500/20 text-yellow-400"
-              : "bg-accent/20 text-accent",
-          ].join(" ")}
-        >
-          {selected.level === "vip" ? "VIP" : "REG"}
-        </span>
-        <span className="text-sm font-semibold text-white">{ticketLabel(selected)}</span>
-        <span className="text-xs text-muted ml-auto">
-          {data.length > 0 ? `${data.length} candles` : ""}
-        </span>
-      </div>
-
-      {/* Chart area */}
-      <div className="relative flex-1 min-h-0 rounded-xl overflow-hidden bg-card border border-border">
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10">
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs text-muted">Loading data…</span>
-            </div>
+    <div className="relative border-[#1f2630] bg-[#0b0e11]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-[#f0b90b]/8 to-transparent" />
+      {loading && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0b0e11]/78 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#f0b90b]/60 border-t-transparent" />
+            <p className="text-sm text-[#c8d1dc]">Loading historical tracker</p>
           </div>
-        )}
-        {!loading && data.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-3xl mb-2">📭</p>
-              <p className="text-sm text-muted">No data for this ticket</p>
-              <p className="text-xs text-muted/60 mt-1">Try a wider time range</p>
-            </div>
+        </div>
+      )}
+      {!loading && !hasData && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center px-6 text-center">
+          <div className="max-w-sm space-y-2">
+            <p className="text-lg font-semibold text-[#f0f4f8]">Nothing to plot</p>
+            <p className="text-sm text-[#848e9c]">{emptyState}</p>
           </div>
-        )}
-        <div ref={containerRef} className="w-full h-full" style={{ minHeight: 360 }} />
+        </div>
+      )}
+      <div className="absolute right-3 top-3 z-20 flex flex-col gap-2">
+        <button type="button" onClick={zoomIn} className="chart-zoom-btn" aria-label="Zoom in">
+          +
+        </button>
+        <button type="button" onClick={zoomOut} className="chart-zoom-btn" aria-label="Zoom out">
+          −
+        </button>
       </div>
+      <div ref={containerRef} className={`w-full ${heightClassName}`} />
     </div>
   );
 }

@@ -1,14 +1,27 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
   * {
     -webkit-tap-highlight-color: transparent;
   }
 
+  html {
+    background: #040814;
+  }
+
   body {
     overscroll-behavior: none;
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    background: #0b0e11;
+    min-height: 100vh;
   }
 
   ::-webkit-scrollbar {
@@ -25,13 +38,198 @@
 }
 
 @layer components {
-  .pill-btn {
-    @apply px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer select-none whitespace-nowrap;
+  .market-shell {
+    @apply min-h-screen bg-[#0b0e11] text-[#eaecef];
   }
-  .pill-btn-active {
-    @apply bg-accent text-white;
+
+  .market-page-header {
+    @apply border-b border-[#1f2630] px-4 py-3 sm:px-5;
   }
-  .pill-btn-inactive {
-    @apply bg-card text-muted border border-border hover:border-accent/50 hover:text-[#d1d4dc];
+
+  .market-section {
+    @apply border-b border-[#1f2630];
+  }
+
+  .market-kicker {
+    @apply text-[11px] uppercase tracking-[0.28em] text-[#848e9c];
+  }
+
+  .market-list-wrap {
+    @apply flex flex-1 min-h-0 flex-col overflow-y-auto border-b border-[#1f2630];
+  }
+
+  .market-list-head {
+    @apply grid grid-cols-[minmax(0,1fr)_104px_84px] gap-3 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-[#848e9c] sm:px-5;
+  }
+
+  .market-section-label {
+    @apply bg-[#10151c] px-4 text-[11px] font-medium uppercase tracking-[0.22em] text-[#6f7c8f] sm:px-5 py-1;
+  }
+
+  .market-footer {
+    @apply mt-auto flex flex-col items-center gap-0.5 border-t border-[#1f2630] px-4 py-1.5 text-center text-xs leading-tight text-[#848e9c] sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:text-left;
+  }
+
+  .footer-disclaimer {
+    @apply text-center;
+  }
+
+  .footer-link {
+    @apply text-[#f0b90b] transition-colors duration-200 hover:text-[#f8d33a];
+  }
+
+  .live-badge {
+    @apply inline-flex items-center gap-2 rounded-full border border-[#1d3b29] bg-[#0f1d16] px-3 py-1 text-xs text-[#6ee7a8];
+  }
+
+  .live-pulse {
+    @apply h-2 w-2 rounded-full bg-[#22c55e];
+    box-shadow: 0 0 0 rgba(34, 197, 94, 0.6);
+    animation: pulse-live 1.6s ease-out infinite;
+  }
+
+  .legend-chip {
+    @apply inline-flex items-center gap-2 rounded-full border border-[#2b3139] bg-[#11161d] px-2.5 py-1;
+  }
+
+  .legend-row {
+    @apply flex max-w-full items-center gap-1 overflow-x-auto whitespace-nowrap pb-1 text-[10px] text-[#848e9c];
+  }
+
+  .market-stat-label {
+    @apply text-[11px] uppercase tracking-[0.18em] text-[#848e9c];
+  }
+
+  .market-stat-value {
+    @apply mt-1 text-sm font-medium text-[#f0f4f8];
+  }
+
+  .detail-header {
+    @apply overflow-hidden border-b border-[#1f2630];
+  }
+
+  .detail-toolbar {
+    @apply border-b border-[#1f2630];
+  }
+
+  .detail-toolbar-inner {
+    @apply px-4 py-2 sm:px-5;
+  }
+
+  .detail-toolbar-row {
+    @apply flex items-center justify-between gap-3;
+  }
+
+  .back-button {
+    @apply flex h-10 w-10 items-center justify-center rounded-full border border-[#2b3139] bg-[#161a1e] text-xl text-[#eaecef] transition-colors duration-200 hover:border-[#474d57];
+  }
+
+  .symbol-trigger {
+    @apply mt-1 flex max-w-full items-center gap-2 overflow-hidden text-left text-[30px] font-semibold tracking-tight text-[#f0f4f8];
+  }
+
+  .symbol-menu {
+    @apply absolute inset-x-0 top-full z-20 mt-2 grid grid-cols-4 gap-1.5 rounded-lg border border-[#2b3139] bg-[#11161d] p-1.5 shadow-[0_18px_48px_rgba(0,0,0,0.45)] sm:left-0 sm:right-auto sm:w-[min(360px,calc(100vw-2rem))];
+  }
+
+  .symbol-menu-item {
+    @apply flex min-h-9 w-full flex-col items-center justify-center rounded-md border border-[#2b3139] bg-[#161a1e] px-1.5 py-1.5 text-[11px] font-medium text-[#c8d1dc] transition-colors duration-200 hover:border-[#474d57] hover:text-[#f0f4f8] sm:text-xs;
+  }
+
+  .symbol-menu-item-active {
+    @apply border-[#f0b90b] bg-[#1e2329] text-[#f0f4f8];
+  }
+
+  .symbol-menu-item-meta {
+    @apply mt-0.5 text-[9px] font-normal uppercase tracking-[0.18em] text-[#848e9c];
+  }
+
+  .compact-tab {
+    @apply rounded px-2 py-1 text-sm text-[#848e9c] transition-colors duration-200 hover:text-[#eaecef];
+  }
+
+  .compact-tab-active {
+    @apply bg-[#1e2329] text-[#f0f4f8];
+  }
+
+  .micro-toggle {
+    @apply rounded border border-[#2b3139] bg-[#161a1e] px-2.5 py-1 text-xs font-medium text-[#eaecef] transition-colors duration-200 hover:border-[#474d57];
+  }
+
+  .chart-zoom-btn {
+    @apply flex h-8 w-8 items-center justify-center rounded border border-[#2b3139] bg-[#11161d]/85 text-lg text-[#f0f4f8] shadow-[0_10px_24px_rgba(0,0,0,0.3)] transition-colors duration-200 hover:border-[#f0b90b] hover:text-[#f0b90b];
+  }
+
+  .trade-actions {
+    @apply grid grid-cols-2 gap-3 border-b border-[#1f2630] px-4 py-2 sm:px-5;
+  }
+
+  .desktop-trade-actions {
+    @apply grid max-w-full grid-cols-2 gap-2;
+  }
+
+  .trade-btn {
+    @apply flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-transform duration-200 hover:scale-[1.01];
+  }
+
+  .trade-btn-buy {
+    @apply bg-[#0ecb81];
+  }
+
+  .trade-btn-sell {
+    @apply bg-[#f6465d];
+  }
+
+  .ticker-row {
+    @apply grid w-full grid-cols-[minmax(0,1fr)_104px_84px] items-center gap-3 px-4 py-2 text-left transition-colors duration-200 sm:px-5;
+  }
+
+  .ticker-row:hover {
+    @apply bg-[#161a1e];
+  }
+
+  .ticker-row-disabled {
+    @apply cursor-not-allowed;
+  }
+
+  .ticker-row-disabled:hover {
+    @apply bg-transparent;
+  }
+
+  .symbol-menu-item:disabled {
+    @apply cursor-not-allowed border-[#20262d] bg-[#12161b] text-[#5f6b7a];
+  }
+
+  .animate-rise {
+    animation: rise-in 700ms cubic-bezier(0.2, 1, 0.22, 1) both;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-live {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55);
+  }
+
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+  }
+
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
   }
 }

@@ -1,144 +1,301 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getSeasonBounds, toLineSeries, toOHLC } from "../lib/ohlc";
 import { supabase } from "../lib/supabase";
-import { cutoffDate, toOHLC } from "../lib/ohlc";
 import {
+  ALL_TICKETS,
   Interval,
+  LinePoint,
   OHLCPoint,
   RawRecord,
+  SeasonBounds,
   TicketKey,
-  TicketLevel,
-  TicketType,
-  TimeRange,
+  TicketSummary,
+  TICKET_COLORS,
+  isSameTicket,
   ticketKey,
 } from "../types";
 
-interface TicketSummary {
+interface UseTicketDataOptions {
+  interval: Interval;
+  focus: TicketKey | null;
+}
+
+interface ChartSeries {
   key: TicketKey;
+  color: string;
+  points: LinePoint[];
   latestPrice: number | null;
   latestVolume: number | null;
-  change24h: number | null; // percentage
+  changeRate: number | null;
+}
+
+interface MarketOverview {
+  highestPrice: number | null;
+  lowestPrice: number | null;
+  averagePrice: number | null;
+  totalVolume: number;
+  recordCount: number;
+  visibleTicketCount: number;
+}
+
+interface FocusOverview {
+  currentPrice: number | null;
+  highestPrice: number | null;
+  lowestPrice: number | null;
+  averagePrice: number | null;
+  totalVolume: number;
+  pointCount: number;
 }
 
 interface UseTicketDataReturn {
-  summaries: TicketSummary[];
-  ohlc: OHLCPoint[];
   loading: boolean;
   error: string | null;
-  lastUpdated: Date | null;
+  lastCapturedAt: string | null;
+  fetchedAt: Date | null;
+  seasonBounds: SeasonBounds;
+  visibleSeries: ChartSeries[];
+  marketOverviewSeries: ChartSeries[];
+  summaries: TicketSummary[];
+  activeTicket: TicketKey | null;
+  activeSummary: TicketSummary | null;
+  activeLinePoints: LinePoint[];
+  activeCandles: OHLCPoint[];
+  overview: MarketOverview;
+  focusOverview: FocusOverview;
 }
 
-// Shared cache by timeRange so switching selected ticket doesn't re-fetch
-const cache: Record<string, { data: RawRecord[]; fetchedAt: number }> = {};
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+let cache: { data: RawRecord[]; fetchedAt: number } | null = null;
+const REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 
-export function useTicketData(
-  selected: TicketKey,
-  interval: Interval,
-  timeRange: TimeRange
-): UseTicketDataReturn {
-  const [allRecords, setAllRecords] = useState<RawRecord[]>([]);
+function buildSummary(records: RawRecord[], key: TicketKey): TicketSummary {
+  if (records.length === 0) {
+    return {
+      key,
+      latestPrice: null,
+      latestVolume: null,
+      changeRate: null,
+      points: 0,
+    };
+  }
+
+  const sorted = [...records].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  const latest = sorted[sorted.length - 1];
+  const latestMs = new Date(latest.created_at).getTime();
+  const oneHourAgoMs = latestMs - 60 * 60 * 1000;
+  const previous =
+    [...sorted]
+      .reverse()
+      .find((record) => new Date(record.created_at).getTime() <= oneHourAgoMs) ?? null;
+  const changeRate =
+    previous && previous.offer_price > 0
+      ? ((latest.offer_price - previous.offer_price) / previous.offer_price) * 100
+      : null;
+
+  return {
+    key,
+    latestPrice: latest.offer_price,
+    latestVolume: latest.offer_volume,
+    changeRate,
+    points: records.length,
+  };
+}
+
+export function useTicketData(options: UseTicketDataOptions): UseTicketDataReturn {
+  const [records, setRecords] = useState<RawRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
 
   useEffect(() => {
-    const cacheKey = timeRange;
-    const cached = cache[cacheKey];
-    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
-      setAllRecords(cached.data);
-      setLoading(false);
-      setLastUpdated(new Date(cached.fetchedAt));
-      return;
-    }
+    let mounted = true;
 
-    abortRef.current?.abort();
-    abortRef.current = new AbortController();
-
-    setLoading(true);
-    setError(null);
-
-    (async () => {
-      try {
-        let query = supabase
-          .schema('temp')
-          .from("s2o_historical_price")
-          .select("ticket_level, ticket_type, offer_price, offer_volume, created_at")
-          .order("created_at", { ascending: true });
-
-        const cutoff = cutoffDate(timeRange);
-        if (cutoff) query = query.gte("created_at", cutoff);
-
-        const { data, error: dbError } = await query;
-        if (dbError) throw new Error(dbError.message);
-
-        const records = (data ?? []) as RawRecord[];
-        cache[cacheKey] = { data: records, fetchedAt: Date.now() };
-        setAllRecords(records);
-        setLastUpdated(new Date());
-      } catch (err) {
-        if (err instanceof Error && err.name !== "AbortError") {
-          setError(err.message);
-        }
-      } finally {
+    async function run(forceRefresh = false) {
+      if (!forceRefresh && cache && Date.now() - cache.fetchedAt < REFRESH_INTERVAL_MS) {
+        setRecords(cache.data);
+        setFetchedAt(new Date(cache.fetchedAt));
         setLoading(false);
+        return;
       }
-    })();
-  }, [timeRange]);
 
-  const summaries = useMemo<TicketSummary[]>(() => {
-    const byTicket = new Map<string, RawRecord[]>();
-    for (const r of allRecords) {
-      const k = ticketKey({ level: r.ticket_level, type: r.ticket_type });
-      if (!byTicket.has(k)) byTicket.set(k, []);
-      byTicket.get(k)!.push(r);
+      setLoading(true);
+      setError(null);
+
+      const { data, error: dbError } = await supabase
+        .schema("temp")
+        .from("s2o_historical_price")
+        .select("ticket_level, ticket_type, offer_price, offer_volume, created_at")
+        .order("created_at", { ascending: true });
+
+      if (!mounted) {
+        return;
+      }
+
+      if (dbError) {
+        setError(dbError.message);
+        setLoading(false);
+        return;
+      }
+
+      const nextRecords = (data ?? []) as RawRecord[];
+      cache = { data: nextRecords, fetchedAt: Date.now() };
+      setRecords(nextRecords);
+      setFetchedAt(new Date(cache.fetchedAt));
+      setLoading(false);
     }
 
-    const now = Date.now();
-    const ms24h = 24 * 60 * 60 * 1000;
-
-    return [
-      { level: "regular" as TicketLevel, type: "All 3 Days" as TicketType },
-      { level: "regular" as TicketLevel, type: "Day 1" as TicketType },
-      { level: "regular" as TicketLevel, type: "Day 2" as TicketType },
-      { level: "regular" as TicketLevel, type: "Day 3" as TicketType },
-      { level: "vip" as TicketLevel, type: "All 3 Days" as TicketType },
-      { level: "vip" as TicketLevel, type: "Day 1" as TicketType },
-      { level: "vip" as TicketLevel, type: "Day 2" as TicketType },
-      { level: "vip" as TicketLevel, type: "Day 3" as TicketType },
-    ].map((key) => {
-      const recs = byTicket.get(ticketKey(key)) ?? [];
-      if (recs.length === 0) {
-        return { key, latestPrice: null, latestVolume: null, change24h: null };
+    run().catch((runError: Error) => {
+      if (!mounted) {
+        return;
       }
 
-      const sorted = [...recs].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-      const latest = sorted[0];
+      setError(runError.message);
+      setLoading(false);
+    });
 
-      const yesterday = sorted.find(
-        (r) => now - new Date(r.created_at).getTime() >= ms24h
+    const intervalId = window.setInterval(() => {
+      run(true).catch((runError: Error) => {
+        if (!mounted) {
+          return;
+        }
+
+        setError(runError.message);
+      });
+    }, REFRESH_INTERVAL_MS);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  return useMemo<UseTicketDataReturn>(() => {
+    const seasonBounds = getSeasonBounds(records);
+    const lastCapturedAt = seasonBounds.end;
+    const filteredRecords = records;
+    const seasonEndMs = seasonBounds.end ? new Date(seasonBounds.end).getTime() : null;
+    const marketWindowRecords =
+      seasonEndMs === null
+        ? []
+        : records.filter(
+            (record) => new Date(record.created_at).getTime() >= seasonEndMs - 24 * 60 * 60 * 1000
+          );
+
+    const grouped = new Map<string, RawRecord[]>();
+    for (const ticket of ALL_TICKETS) {
+      const bucket = filteredRecords.filter(
+        (record) => record.ticket_level === ticket.level && record.ticket_type === ticket.type
       );
-      const change24h = yesterday
-        ? ((latest.offer_price - yesterday.offer_price) / yesterday.offer_price) * 100
-        : null;
+      if (bucket.length > 0) {
+        grouped.set(ticketKey(ticket), bucket);
+      }
+    }
+
+    const visibleSeries: ChartSeries[] = [...grouped.entries()]
+      .map(([seriesKey, seriesRecords]) => {
+        const key = ALL_TICKETS.find((ticket) => ticketKey(ticket) === seriesKey);
+        if (!key) {
+          return null;
+        }
+
+        const summary = buildSummary(seriesRecords, key);
+        return {
+          key,
+          color: TICKET_COLORS[seriesKey] ?? "#38bdf8",
+          points: toLineSeries(seriesRecords, options.interval),
+          latestPrice: summary.latestPrice,
+          latestVolume: summary.latestVolume,
+          changeRate: summary.changeRate,
+        };
+      })
+      .filter((series): series is ChartSeries => series !== null);
+
+    const marketOverviewSeries: ChartSeries[] = ALL_TICKETS.map((ticket) => {
+      const seriesRecords = marketWindowRecords.filter(
+        (record) => record.ticket_level === ticket.level && record.ticket_type === ticket.type
+      );
+      const summary = buildSummary(seriesRecords, ticket);
 
       return {
-        key,
-        latestPrice: latest.offer_price,
-        latestVolume: latest.offer_volume,
-        change24h,
+        key: ticket,
+        color: TICKET_COLORS[ticketKey(ticket)] ?? "#38bdf8",
+        points: toLineSeries(seriesRecords, "10m"),
+        latestPrice: summary.latestPrice,
+        latestVolume: summary.latestVolume,
+        changeRate: summary.changeRate,
       };
-    });
-  }, [allRecords]);
+    }).filter((series) => series.points.length > 0);
 
-  const ohlc = useMemo<OHLCPoint[]>(() => {
-    const filtered = allRecords.filter(
-      (r) => r.ticket_level === selected.level && r.ticket_type === selected.type
-    );
-    return toOHLC(filtered, interval);
-  }, [allRecords, selected, interval]);
+    const summaries = visibleSeries.map((series) => ({
+      key: series.key,
+      latestPrice: series.latestPrice,
+      latestVolume: series.latestVolume,
+      changeRate: series.changeRate,
+      points: series.points.length,
+    }));
 
-  return { summaries, ohlc, loading, error, lastUpdated };
+    const activeTicket =
+      visibleSeries.find((series) => isSameTicket(series.key, options.focus))?.key ??
+      visibleSeries[0]?.key ??
+      null;
+
+    const activeRecords = activeTicket
+      ? filteredRecords.filter(
+          (record) =>
+            record.ticket_level === activeTicket.level && record.ticket_type === activeTicket.type
+        )
+      : [];
+    const activeSummary =
+      summaries.find((summary) => isSameTicket(summary.key, activeTicket)) ?? null;
+
+    const numericPrices = filteredRecords.map((record) => record.offer_price);
+    const focusPrices = activeRecords.map((record) => record.offer_price);
+    const overview: MarketOverview = {
+      highestPrice: numericPrices.length > 0 ? Math.max(...numericPrices) : null,
+      lowestPrice: numericPrices.length > 0 ? Math.min(...numericPrices) : null,
+      averagePrice:
+        numericPrices.length > 0
+          ? Math.round(numericPrices.reduce((total, price) => total + price, 0) / numericPrices.length)
+          : null,
+      totalVolume: filteredRecords.reduce((total, record) => total + record.offer_volume, 0),
+      recordCount: filteredRecords.length,
+      visibleTicketCount: visibleSeries.length,
+    };
+    const focusOverview: FocusOverview = {
+      currentPrice: activeSummary?.latestPrice ?? null,
+      highestPrice: focusPrices.length > 0 ? Math.max(...focusPrices) : null,
+      lowestPrice: focusPrices.length > 0 ? Math.min(...focusPrices) : null,
+      averagePrice:
+        focusPrices.length > 0
+          ? Math.round(focusPrices.reduce((total, price) => total + price, 0) / focusPrices.length)
+          : null,
+      totalVolume: activeRecords.reduce((total, record) => total + record.offer_volume, 0),
+      pointCount: activeRecords.length,
+    };
+
+    return {
+      loading,
+      error,
+      lastCapturedAt,
+      fetchedAt,
+      seasonBounds,
+      visibleSeries,
+      marketOverviewSeries,
+      summaries,
+      activeTicket,
+      activeSummary,
+      activeLinePoints: toLineSeries(activeRecords, options.interval),
+      activeCandles: toOHLC(activeRecords, options.interval),
+      overview,
+      focusOverview,
+    };
+  }, [
+    records,
+    loading,
+    error,
+    fetchedAt,
+    options.focus,
+    options.interval,
+  ]);
 }
