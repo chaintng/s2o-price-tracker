@@ -1,4 +1,4 @@
-# S2O Historical Price
+# S2O Price Tracker
 This project contain 2 apps `fetcher` and `viewer`
 
 
