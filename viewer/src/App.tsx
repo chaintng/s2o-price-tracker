@@ -150,12 +150,12 @@ export default function App() {
       </a>
       <span>, visit </span>
       <a
-        href="https://github.com/chaintng"
+        href="https://instagram.com/chaintng"
         target="_blank"
         rel="noreferrer"
         className="footer-link"
       >
-        GitHub
+        Instagram
       </a>
     </>
   );
