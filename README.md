@@ -1,6 +1,10 @@
-# Prompt
+# S2O Historical Price
+This project contain 2 apps `fetcher` and `viewer`
+
+
+# Original Prompt 😅
 this project will have 2 app
-1. fetcher, 2. chart view
+1. fetcher, 2. viewer
 
 let start with fetcher app
 

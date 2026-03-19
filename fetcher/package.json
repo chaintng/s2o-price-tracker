@@ -5,8 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "deploy": "npm run build && serverless deploy",
-    "deploy:prod": "npm run build && serverless deploy --stage prod",
+    "deploy:lambda": "npm run build && npm install --production && zip -r lambda-function.zip dist node_modules && aws lambda update-function-code --function-name s2o-fetcher --zip-file fileb://lambda-function.zip --region ap-southeast-7",
     "local": "ts-node src/index.ts"
   },
   "dependencies": {
@@ -17,8 +16,6 @@
   "devDependencies": {
     "@types/aws-lambda": "^8.10.149",
     "@types/node": "^22.13.14",
-    "serverless": "^4.14.1",
-    "serverless-plugin-typescript": "^2.1.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2"
   }

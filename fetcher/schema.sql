@@ -1,6 +1,6 @@
 -- Run this in your Supabase SQL editor to create the table
 
-CREATE TABLE IF NOT EXISTS s2o_historical_price (
+CREATE TABLE IF NOT EXISTS temp.s2o_historical_price (
   id          BIGSERIAL PRIMARY KEY,
   ticket_level VARCHAR(50)  NOT NULL, -- 'regular' | 'vip'
   ticket_type  VARCHAR(100) NOT NULL, -- 'All 3 Days' | 'Day 1' | 'Day 2' | 'Day 3'
@@ -10,7 +10,14 @@ CREATE TABLE IF NOT EXISTS s2o_historical_price (
 );
 
 -- Index for time-series queries
-CREATE INDEX IF NOT EXISTS idx_s2o_created_at ON s2o_historical_price (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_s2o_created_at ON temp.s2o_historical_price (created_at DESC);
 
 -- Index for filtering by ticket type
-CREATE INDEX IF NOT EXISTS idx_s2o_ticket ON s2o_historical_price (ticket_level, ticket_type);
+CREATE INDEX IF NOT EXISTS idx_s2o_ticket ON temp.s2o_historical_price (ticket_level, ticket_type);
+
+-- Enable Row Level Security
+ALTER TABLE temp.s2o_historical_price ENABLE ROW LEVEL SECURITY;
+
+-- Allow anon (public) to read — required for the chart-view frontend
+CREATE POLICY "public read" ON temp.s2o_historical_price
+  FOR SELECT TO anon USING (true);

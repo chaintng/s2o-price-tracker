@@ -1,0 +1,27 @@
+{
+  "name": "s2o-chart-view",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "deploy": "npm run build && aws s3 sync dist/ s3://chaintng.com/s2o/ --delete --exclude 'index.html' --cache-control 'public,max-age=31536000,immutable' && aws s3 cp dist/index.html s3://chaintng.com/s2o/index.html --content-type 'text/html; charset=utf-8' --cache-control 'no-cache, no-store, must-revalidate'"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "echarts": "^5.6.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.20",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.3"
+  }
+}

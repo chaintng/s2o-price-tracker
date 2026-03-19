@@ -26,7 +26,7 @@ export async function insertOffers(offers: TicketOffer[]): Promise<void> {
     created_at: now,
   }));
 
-  const { error } = await supabase.from("s2o_historical_price").insert(rows);
+  const { error } = await supabase.schema('temp').from("s2o_historical_price").insert(rows);
 
   if (error) {
     throw new Error(`Supabase insert failed: ${error.message}`);

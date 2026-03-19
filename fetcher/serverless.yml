@@ -5,7 +5,7 @@ frameworkVersion: "4"
 provider:
   name: aws
   runtime: nodejs20.x
-  region: ap-southeast-1
+  region: ap-southeast-7
   environment:
     SUPABASE_URL: ${env:SUPABASE_URL}
     SUPABASE_SERVICE_ROLE_KEY: ${env:SUPABASE_SERVICE_ROLE_KEY}
