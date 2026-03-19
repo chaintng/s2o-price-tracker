@@ -1,0 +1,25 @@
+{
+  "name": "s2o-fetcher",
+  "version": "1.0.0",
+  "description": "Lambda fetcher for S2O resale ticket prices",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "deploy": "npm run build && serverless deploy",
+    "deploy:prod": "npm run build && serverless deploy --stage prod",
+    "local": "ts-node src/index.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "axios": "^1.8.4",
+    "cheerio": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.149",
+    "@types/node": "^22.13.14",
+    "serverless": "^4.14.1",
+    "serverless-plugin-typescript": "^2.1.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  }
+}
