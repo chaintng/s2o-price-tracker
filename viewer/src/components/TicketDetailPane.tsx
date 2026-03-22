@@ -52,6 +52,13 @@ interface TicketDetailPaneProps {
   formatChange: (value: number | null) => string;
 }
 
+const INITIAL_WINDOW_HOURS_BY_INTERVAL: Record<Interval, number> = {
+  "10m": 6,
+  "1H": 24 * 3,
+  "6H": 24 * 7,
+  "1D": 24 * 30,
+};
+
 function CompactTabs<T extends string>({
   options,
   value,
@@ -103,6 +110,7 @@ export function TicketDetailPane({
   formatChange,
 }: TicketDetailPaneProps) {
   const isDesktop = layout === "desktop";
+  const initialWindowHours = INITIAL_WINDOW_HOURS_BY_INTERVAL[interval];
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -259,6 +267,7 @@ export function TicketDetailPane({
           activeLinePoints={activeLinePoints}
           activeCandles={activeCandles}
           heightClassName={isDesktop ? "h-[320px] sm:h-[360px] lg:h-[min(62vh,560px)]" : "h-full"}
+          initialWindowHours={initialWindowHours}
         />
       </div>
 

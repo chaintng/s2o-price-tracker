@@ -44,8 +44,8 @@ function formatChange(value: number | null): string {
 export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>("market");
   const [mode, setMode] = useState<ChartMode>("candlestick");
-  const [interval, setInterval] = useState<Interval>("10m");
-  const [focus, setFocus] = useState<TicketKey | null>(ALL_TICKETS[0]);
+  const [interval, setInterval] = useState<Interval>("1H");
+  const [focus, setFocus] = useState<TicketKey | null>({ level: "vip", type: "All 3 Days" });
   const [symbolMenuOpen, setSymbolMenuOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
 
@@ -245,7 +245,7 @@ export default function App() {
 
               <section className="market-section">
                 <div className="flex flex-col gap-2 px-4 py-3 sm:px-5">
-                  <p className="market-kicker">Technical chart · 10m bars</p>
+                  <p className="market-kicker">Technical chart · {INTERVAL_OPTIONS.find((option) => option.value === interval)?.label ?? interval} bars</p>
                   <div className="legend-row hidden">
                     {marketOverviewSeries.map((series) => (
                       <span key={ticketKey(series.key)} className="legend-chip">
@@ -258,7 +258,7 @@ export default function App() {
 
                 <PriceChart
                   mode="line"
-                  interval="10m"
+                  interval={interval}
                   loading={loading}
                   visibleSeries={marketOverviewSeries}
                   activeTicket={null}

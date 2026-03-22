@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { getSeasonBounds } from "../lib/ohlc";
-import { supabase } from "../lib/supabase";
+import { fetchTicketBuckets } from "../lib/ticketDataApi";
 import {
   ALL_TICKETS,
   BucketedRecord,
   Interval,
   LinePoint,
   OHLCPoint,
-  RawRecord,
   SeasonBounds,
   TicketKey,
   TicketSummary,
@@ -52,16 +50,20 @@ interface UseTicketDataReturn {
   focusOverview: FocusOverview;
 }
 
-interface RecordsCache {
-  data: RawRecord[];
-  fetchedAt: number;
-  bucketedByInterval: Partial<Record<Interval, BucketedRecord[]>>;
-}
-
-let cache: RecordsCache | null = null;
 const REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 
-function buildSummary(records: RawRecord[], key: TicketKey): TicketSummary {
+function getSeasonBounds(records: BucketedRecord[]): SeasonBounds {
+  if (records.length === 0) {
+    return { start: null, end: null };
+  }
+
+  return {
+    start: records[0].bucket_at,
+    end: records[records.length - 1].bucket_at,
+  };
+}
+
+function buildSummary(records: BucketedRecord[], key: TicketKey): TicketSummary {
   if (records.length === 0) {
     return {
       key,
@@ -73,109 +75,48 @@ function buildSummary(records: RawRecord[], key: TicketKey): TicketSummary {
   }
 
   const sorted = [...records].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    (left, right) => new Date(left.bucket_at).getTime() - new Date(right.bucket_at).getTime()
   );
   const latest = sorted[sorted.length - 1];
-  const latestMs = new Date(latest.created_at).getTime();
+  const latestMs = new Date(latest.bucket_at).getTime();
   const oneHourAgoMs = latestMs - 60 * 60 * 1000;
   const previous =
     [...sorted]
       .reverse()
-      .find((record) => new Date(record.created_at).getTime() <= oneHourAgoMs) ?? null;
+      .find((record) => new Date(record.bucket_at).getTime() <= oneHourAgoMs) ?? null;
   const changeRate =
-    previous && previous.offer_price > 0
-      ? ((latest.offer_price - previous.offer_price) / previous.offer_price) * 100
+    previous && previous.close > 0
+      ? ((latest.close - previous.close) / previous.close) * 100
       : null;
 
   return {
     key,
-    latestPrice: latest.offer_price,
-    latestVolume: latest.offer_volume,
+    latestPrice: latest.close,
+    latestVolume: latest.volume,
     changeRate,
     points: records.length,
   };
 }
 
-async function fetchBucketedRecords(interval: Interval): Promise<BucketedRecord[]> {
-  const { data, error } = await supabase.schema("temp").rpc("s2o_price_buckets", {
-    p_interval: interval,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  if (!data) {
-    throw new Error(`Missing bucketed data for interval ${interval}`);
-  }
-
-  return (data as BucketedRecord[]).sort(
-    (left, right) => new Date(left.bucket_at).getTime() - new Date(right.bucket_at).getTime()
-  );
-}
-
 export function useTicketData(options: UseTicketDataOptions): UseTicketDataReturn {
-  const [records, setRecords] = useState<RawRecord[]>([]);
-  const [intervalBuckets, setIntervalBuckets] = useState<BucketedRecord[]>([]);
-  const [overviewBuckets, setOverviewBuckets] = useState<BucketedRecord[]>([]);
+  const [buckets, setBuckets] = useState<BucketedRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     let mounted = true;
 
-    async function run(forceRefresh = false) {
-      if (
-        !forceRefresh &&
-        cache &&
-        Date.now() - cache.fetchedAt < REFRESH_INTERVAL_MS &&
-        cache.bucketedByInterval[options.interval] &&
-        cache.bucketedByInterval["10m"]
-      ) {
-        setRecords(cache.data);
-        setIntervalBuckets(cache.bucketedByInterval[options.interval] ?? []);
-        setOverviewBuckets(cache.bucketedByInterval["10m"] ?? []);
-        setLoading(false);
-        return;
-      }
-
+    async function run() {
       setLoading(true);
       setError(null);
 
-      const { data, error: dbError } = await supabase
-        .schema("temp")
-        .from("s2o_historical_price")
-        .select("ticket_level, ticket_type, offer_price, offer_volume, created_at")
-        .order("created_at", { ascending: false });
+      const nextBuckets = await fetchTicketBuckets(options.interval);
 
       if (!mounted) {
         return;
       }
 
-      if (dbError) {
-        setError(dbError.message);
-        setLoading(false);
-        return;
-      }
-
-      const nextRecords = (data ?? []) as RawRecord[];
-      const nextIntervalBuckets = await fetchBucketedRecords(options.interval);
-      const nextOverviewBuckets =
-        options.interval === "10m"
-          ? nextIntervalBuckets
-          : await fetchBucketedRecords("10m");
-
-      cache = {
-        data: nextRecords,
-        fetchedAt: Date.now(),
-        bucketedByInterval: {
-          ...(cache?.bucketedByInterval ?? {}),
-          [options.interval]: nextIntervalBuckets,
-          "10m": nextOverviewBuckets,
-        },
-      };
-      setRecords(nextRecords);
-      setIntervalBuckets(nextIntervalBuckets);
-      setOverviewBuckets(nextOverviewBuckets);
+      setBuckets(nextBuckets);
       setLoading(false);
     }
 
@@ -189,7 +130,7 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
     });
 
     const intervalId = window.setInterval(() => {
-      run(true).catch((runError: Error) => {
+      run().catch((runError: Error) => {
         if (!mounted) {
           return;
         }
@@ -205,44 +146,27 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
   }, [options.interval]);
 
   return useMemo<UseTicketDataReturn>(() => {
-    const seasonBounds = getSeasonBounds(records);
+    const seasonBounds = getSeasonBounds(buckets);
     const lastCapturedAt = seasonBounds.end;
-    const filteredRecords = records;
+    const grouped = new Map<string, BucketedRecord[]>();
 
-    const grouped = new Map<string, RawRecord[]>();
-    const bucketedGrouped = new Map<string, BucketedRecord[]>();
-    const overviewGrouped = new Map<string, BucketedRecord[]>();
     for (const ticket of ALL_TICKETS) {
-      const bucket = filteredRecords.filter(
+      const records = buckets.filter(
         (record) => record.ticket_level === ticket.level && record.ticket_type === ticket.type
       );
-      if (bucket.length > 0) {
-        grouped.set(ticketKey(ticket), bucket);
-      }
-
-      const intervalBucket = intervalBuckets.filter(
-        (record) => record.ticket_level === ticket.level && record.ticket_type === ticket.type
-      );
-      if (intervalBucket.length > 0) {
-        bucketedGrouped.set(ticketKey(ticket), intervalBucket);
-      }
-
-      const overviewBucket = overviewBuckets.filter(
-        (record) => record.ticket_level === ticket.level && record.ticket_type === ticket.type
-      );
-      if (overviewBucket.length > 0) {
-        overviewGrouped.set(ticketKey(ticket), overviewBucket);
+      if (records.length > 0) {
+        grouped.set(ticketKey(ticket), records);
       }
     }
 
-    const visibleSeries: ChartSeries[] = [...bucketedGrouped.entries()]
+    const visibleSeries: ChartSeries[] = [...grouped.entries()]
       .map(([seriesKey, seriesRecords]) => {
         const key = ALL_TICKETS.find((ticket) => ticketKey(ticket) === seriesKey);
         if (!key) {
           return null;
         }
 
-        const summary = buildSummary(grouped.get(seriesKey) ?? [], key);
+        const summary = buildSummary(seriesRecords, key);
         return {
           key,
           color: TICKET_COLORS[seriesKey] ?? "#38bdf8",
@@ -259,8 +183,8 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
       .filter((series): series is ChartSeries => series !== null);
 
     const marketOverviewSeries: ChartSeries[] = ALL_TICKETS.map((ticket) => {
-      const summary = buildSummary(grouped.get(ticketKey(ticket)) ?? [], ticket);
-      const seriesRecords = overviewGrouped.get(ticketKey(ticket)) ?? [];
+      const seriesRecords = grouped.get(ticketKey(ticket)) ?? [];
+      const summary = buildSummary(seriesRecords, ticket);
 
       return {
         key: ticket,
@@ -276,32 +200,21 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
       };
     }).filter((series) => series.points.length > 0);
 
-    const summaries = visibleSeries.map((series) => ({
-      key: series.key,
-      latestPrice: series.latestPrice,
-      latestVolume: series.latestVolume,
-      changeRate: series.changeRate,
-      points: series.points.length,
-    }));
+    const summaries = ALL_TICKETS.map((ticket) =>
+      buildSummary(grouped.get(ticketKey(ticket)) ?? [], ticket)
+    );
 
     const activeTicket =
-      visibleSeries.find((series) => isSameTicket(series.key, options.focus))?.key ??
-      visibleSeries[0]?.key ??
+      summaries.find((summary) => isSameTicket(summary.key, options.focus) && summary.points > 0)?.key ??
+      marketOverviewSeries[0]?.key ??
       null;
-
-    const activeRecords = activeTicket
-      ? filteredRecords.filter(
-        (record) =>
-          record.ticket_level === activeTicket.level && record.ticket_type === activeTicket.type
-      )
-      : [];
     const activeSummary =
       summaries.find((summary) => isSameTicket(summary.key, activeTicket)) ?? null;
     const activeBucketedRecords = activeTicket
-      ? bucketedGrouped.get(ticketKey(activeTicket)) ?? []
+      ? grouped.get(ticketKey(activeTicket)) ?? []
       : [];
 
-    const focusPrices = activeRecords.map((record) => record.offer_price);
+    const focusPrices = activeBucketedRecords.map((record) => record.close);
     const focusOverview: FocusOverview = {
       currentPrice: activeSummary?.latestPrice ?? null,
       highestPrice: focusPrices.length > 0 ? Math.max(...focusPrices) : null,
@@ -337,12 +250,5 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
       })),
       focusOverview,
     };
-  }, [
-    records,
-    intervalBuckets,
-    overviewBuckets,
-    loading,
-    error,
-    options.focus,
-  ]);
+  }, [buckets, error, loading, options.focus]);
 }

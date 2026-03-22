@@ -175,24 +175,14 @@ export function getSeasonBounds(records: RawRecord[]): SeasonBounds {
 
 export function formatAxisTime(isoStr: string, interval: Interval): string {
   const d = new Date(isoStr);
+  const dateLabel = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+
   if (interval === "1D") {
-    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+    return dateLabel;
   }
-  if (interval === "10m" || interval === "1H") {
-    return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  }
-  if (interval === "6H") {
-    return (
-      d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) +
-      " " +
-      d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
-    );
-  }
-  return (
-    d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) +
-    " " +
-    d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
-  );
+
+  const timeLabel = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return `${dateLabel} ${timeLabel}`;
 }
 
 export function formatDateTime(isoStr: string): string {

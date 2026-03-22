@@ -22,7 +22,11 @@ ALTER TABLE temp.s2o_historical_price ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "public read" ON temp.s2o_historical_price
   FOR SELECT TO anon USING (true);
 
-CREATE OR REPLACE FUNCTION temp.s2o_price_buckets(p_interval TEXT)
+DROP FUNCTION IF EXISTS temp.s2o_price_buckets(TEXT, TEXT[]);
+
+CREATE OR REPLACE FUNCTION temp.s2o_price_buckets(
+  p_interval TEXT
+)
 RETURNS TABLE (
   ticket_level VARCHAR(50),
   ticket_type VARCHAR(100),
@@ -63,7 +67,7 @@ AS $$
     ROUND(AVG(n.offer_volume))::INTEGER AS volume
   FROM normalized AS n
   GROUP BY n.ticket_level, n.ticket_type, n.bucket_local
-  ORDER BY bucket_at ASC;
+  ORDER BY bucket_at DESC;
 $$;
 
 GRANT EXECUTE ON FUNCTION temp.s2o_price_buckets(TEXT) TO anon;

@@ -16,7 +16,7 @@ import type {
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import { useEffect, useRef, useState } from "react";
-import { formatAxisTime } from "../lib/ohlc";
+import { formatAxisTime, formatDateTime } from "../lib/ohlc";
 import { ChartMode, Interval, LinePoint, OHLCPoint, TicketKey, ticketLabel } from "../types";
 
 echarts.use([
@@ -58,6 +58,11 @@ interface Props {
   initialWindowHours?: number | null;
 }
 
+interface ZoomWindow {
+  start: number;
+  end: number;
+}
+
 const CHART_BG = "transparent";
 const GRID = "#243149";
 const TEXT = "#9fb0cb";
@@ -66,6 +71,41 @@ const TOOLTIP_BG = "#081120";
 
 function formatPrice(price: number): string {
   return `฿${price.toLocaleString()}`;
+}
+
+function buildTooltipRow(label: string, value: string, color = TEXT): string {
+  return `<div style="display:flex;justify-content:space-between;gap:24px">
+    <span style="color:${color}">${label}</span>
+    <span>${value}</span>
+  </div>`;
+}
+
+function getDefaultZoomWindow(
+  timestamps: number[],
+  initialWindowHours: number | null
+): ZoomWindow {
+  if (initialWindowHours === null || initialWindowHours <= 0 || timestamps.length === 0) {
+    return { start: 0, end: 100 };
+  }
+
+  const earliestMs = Math.min(...timestamps);
+  const latestMs = Math.max(...timestamps);
+  const nowMs = Date.now();
+  const domainEndMs = Math.max(latestMs, nowMs);
+  const domainSpanMs = domainEndMs - earliestMs;
+
+  if (domainSpanMs <= 0) {
+    return { start: 0, end: 100 };
+  }
+
+  const requestedStartMs = nowMs - initialWindowHours * 60 * 60 * 1000;
+  const visibleStartMs = Math.max(earliestMs, requestedStartMs);
+  const visibleEndMs = Math.min(domainEndMs, nowMs);
+
+  return {
+    start: ((visibleStartMs - earliestMs) / domainSpanMs) * 100,
+    end: ((visibleEndMs - earliestMs) / domainSpanMs) * 100,
+  };
 }
 
 function buildLineOption(
@@ -108,6 +148,11 @@ function buildLineOption(
         }
 
         const title = String(list[0].name ?? "");
+        const hoveredTime = Array.isArray(list[0].value) ? String(list[0].value[0] ?? "") : "";
+        const hoveredPoint =
+          activeTicket && hoveredTime
+            ? activeLinePoints.find((point) => point.time === hoveredTime) ?? null
+            : null;
         const rows = list
           .filter((item) => item.seriesName !== "Focused volume")
           .map((item) => {
@@ -121,8 +166,9 @@ function buildLineOption(
           .join("");
 
         return `<div style="display:flex;flex-direction:column;gap:8px;min-width:220px">
-          <div style="color:${TEXT};font-size:11px">${title}</div>
+          ${buildTooltipRow("Date", hoveredTime ? formatDateTime(hoveredTime) : title)}
           ${rows}
+          ${hoveredPoint ? buildTooltipRow("Volume", hoveredPoint.volume.toLocaleString()) : ""}
         </div>`;
       },
     },
@@ -284,22 +330,23 @@ function buildCandlestickOption(
       formatter: (params) => {
         const list = Array.isArray(params) ? params : [params];
         const candle = list.find((item) => item.seriesType === "candlestick");
-        const volume = list.find((item) => item.seriesType === "bar");
-        if (!candle || !Array.isArray(candle.data)) {
+        if (!candle || typeof candle.dataIndex !== "number") {
           return "";
         }
 
-        const [open, close, low, high] = candle.data as [number, number, number, number];
-        const volumeValue = Array.isArray(volume?.data) ? Number(volume.data[1]) : 0;
+        const point = candles[candle.dataIndex];
+        if (!point) {
+          return "";
+        }
 
         return `<div style="display:flex;flex-direction:column;gap:6px;min-width:220px">
-          <div style="color:${TEXT};font-size:11px">${String(candle.name ?? "")}</div>
-          <div style="display:flex;justify-content:space-between"><span>Ticket</span><span>${activeTicket ? ticketLabel(activeTicket) : "N/A"}</span></div>
-          <div style="display:flex;justify-content:space-between"><span>Open</span><span>${formatPrice(open)}</span></div>
-          <div style="display:flex;justify-content:space-between"><span>High</span><span>${formatPrice(high)}</span></div>
-          <div style="display:flex;justify-content:space-between"><span>Low</span><span>${formatPrice(low)}</span></div>
-          <div style="display:flex;justify-content:space-between"><span>Close</span><span>${formatPrice(close)}</span></div>
-          <div style="display:flex;justify-content:space-between"><span>Volume</span><span>${volumeValue.toLocaleString()}</span></div>
+          ${buildTooltipRow("Date", formatDateTime(point.time))}
+          ${buildTooltipRow("Ticket", activeTicket ? ticketLabel(activeTicket) : "N/A")}
+          ${buildTooltipRow("Open", formatPrice(point.open))}
+          ${buildTooltipRow("High", formatPrice(point.high))}
+          ${buildTooltipRow("Low", formatPrice(point.low))}
+          ${buildTooltipRow("Close", formatPrice(point.close))}
+          ${buildTooltipRow("Volume", point.volume.toLocaleString())}
         </div>`;
       },
     },
@@ -418,34 +465,6 @@ export function PriceChart({
     applyZoom(center - nextSpan / 2, center + nextSpan / 2);
   };
 
-  const getInitialZoomWindow = () => {
-    if (initialWindowHours === null || initialWindowHours <= 0) {
-      return { start: 0, end: 100 };
-    }
-
-    const seriesTimestamps = visibleSeries.flatMap((series) =>
-      series.points.map((point) => new Date(point.time).getTime())
-    );
-
-    if (seriesTimestamps.length === 0) {
-      return { start: 0, end: 100 };
-    }
-
-    const latestMs = Math.max(...seriesTimestamps);
-    const earliestMs = Math.min(...seriesTimestamps);
-    const totalSpanMs = latestMs - earliestMs;
-
-    if (totalSpanMs <= 0) {
-      return { start: 0, end: 100 };
-    }
-
-    const windowStartMs = latestMs - initialWindowHours * 60 * 60 * 1000;
-    const clampedStartMs = Math.max(earliestMs, windowStartMs);
-    const start = ((clampedStartMs - earliestMs) / totalSpanMs) * 100;
-
-    return { start, end: 100 };
-  };
-
   useEffect(() => {
     if (!containerRef.current) {
       return;
@@ -477,8 +496,13 @@ export function PriceChart({
       return;
     }
 
-    const nextZoomWindow =
-      mode === "candlestick" ? { start: 0, end: 100 } : getInitialZoomWindow();
+    const timestamps =
+      mode === "candlestick"
+        ? activeCandles.map((point) => new Date(point.time).getTime())
+        : visibleSeries.flatMap((series) =>
+            series.points.map((point) => new Date(point.time).getTime())
+          );
+    const nextZoomWindow = getDefaultZoomWindow(timestamps, initialWindowHours);
     setZoomWindow(nextZoomWindow);
 
     if (mode === "candlestick") {
