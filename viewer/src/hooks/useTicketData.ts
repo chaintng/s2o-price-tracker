@@ -30,29 +30,17 @@ interface ChartSeries {
   changeRate: number | null;
 }
 
-interface MarketOverview {
-  highestPrice: number | null;
-  lowestPrice: number | null;
-  averagePrice: number | null;
-  totalVolume: number;
-  recordCount: number;
-  visibleTicketCount: number;
-}
-
 interface FocusOverview {
   currentPrice: number | null;
   highestPrice: number | null;
   lowestPrice: number | null;
   averagePrice: number | null;
-  totalVolume: number;
-  pointCount: number;
 }
 
 interface UseTicketDataReturn {
   loading: boolean;
   error: string | null;
   lastCapturedAt: string | null;
-  fetchedAt: Date | null;
   seasonBounds: SeasonBounds;
   visibleSeries: ChartSeries[];
   marketOverviewSeries: ChartSeries[];
@@ -61,7 +49,6 @@ interface UseTicketDataReturn {
   activeSummary: TicketSummary | null;
   activeLinePoints: LinePoint[];
   activeCandles: OHLCPoint[];
-  overview: MarketOverview;
   focusOverview: FocusOverview;
 }
 
@@ -133,8 +120,6 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
   const [overviewBuckets, setOverviewBuckets] = useState<BucketedRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
-
   useEffect(() => {
     let mounted = true;
 
@@ -149,7 +134,6 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
         setRecords(cache.data);
         setIntervalBuckets(cache.bucketedByInterval[options.interval] ?? []);
         setOverviewBuckets(cache.bucketedByInterval["10m"] ?? []);
-        setFetchedAt(new Date(cache.fetchedAt));
         setLoading(false);
         return;
       }
@@ -192,7 +176,6 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
       setRecords(nextRecords);
       setIntervalBuckets(nextIntervalBuckets);
       setOverviewBuckets(nextOverviewBuckets);
-      setFetchedAt(new Date(cache.fetchedAt));
       setLoading(false);
     }
 
@@ -318,19 +301,7 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
       ? bucketedGrouped.get(ticketKey(activeTicket)) ?? []
       : [];
 
-    const numericPrices = filteredRecords.map((record) => record.offer_price);
     const focusPrices = activeRecords.map((record) => record.offer_price);
-    const overview: MarketOverview = {
-      highestPrice: numericPrices.length > 0 ? Math.max(...numericPrices) : null,
-      lowestPrice: numericPrices.length > 0 ? Math.min(...numericPrices) : null,
-      averagePrice:
-        numericPrices.length > 0
-          ? Math.round(numericPrices.reduce((total, price) => total + price, 0) / numericPrices.length)
-          : null,
-      totalVolume: filteredRecords.reduce((total, record) => total + record.offer_volume, 0),
-      recordCount: filteredRecords.length,
-      visibleTicketCount: visibleSeries.length,
-    };
     const focusOverview: FocusOverview = {
       currentPrice: activeSummary?.latestPrice ?? null,
       highestPrice: focusPrices.length > 0 ? Math.max(...focusPrices) : null,
@@ -339,15 +310,12 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
         focusPrices.length > 0
           ? Math.round(focusPrices.reduce((total, price) => total + price, 0) / focusPrices.length)
           : null,
-      totalVolume: activeRecords.reduce((total, record) => total + record.offer_volume, 0),
-      pointCount: activeRecords.length,
     };
 
     return {
       loading,
       error,
       lastCapturedAt,
-      fetchedAt,
       seasonBounds,
       visibleSeries,
       marketOverviewSeries,
@@ -367,7 +335,6 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
         close: record.close,
         volume: record.volume,
       })),
-      overview,
       focusOverview,
     };
   }, [
@@ -376,8 +343,6 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
     overviewBuckets,
     loading,
     error,
-    fetchedAt,
     options.focus,
-    options.interval,
   ]);
 }

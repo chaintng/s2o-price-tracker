@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { PriceChart } from "./components/PriceChart";
+import { TicketDetailPane } from "./components/TicketDetailPane";
 import { formatDateTime } from "./lib/ohlc";
 import { useTicketData } from "./hooks/useTicketData";
 import {
@@ -11,7 +12,6 @@ import {
   TICKET_COLORS,
   isSameTicket,
   ticketKey,
-  ticketLabel,
   ticketShortLabel,
 } from "./types";
 
@@ -39,31 +39,6 @@ function formatChange(value: number | null): string {
   }
 
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
-}
-
-function CompactTabs<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { label: string; value: T }[];
-  value: T;
-  onChange: (nextValue: T) => void;
-}) {
-  return (
-    <div className="flex items-center gap-1 overflow-x-auto">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className={`compact-tab ${value === option.value ? "compact-tab-active" : ""}`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 export default function App() {
@@ -303,151 +278,34 @@ export default function App() {
             </div>
 
             <section className="hidden h-full min-h-0 overflow-hidden lg:flex lg:flex-col">
-              <header className="detail-header">
-                <div className="py-4">
-                  <div className="relative min-w-0 overflow-hidden px-4">
-                    <div className="flex items-start justify-between gap-3 lg:flex-wrap">
-                      <div className="min-w-0">
-                        <p className="market-kicker">
-                          Updated {lastCapturedAt ? formatDateTime(lastCapturedAt) : "—"}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setSymbolMenuOpen((open) => !open)}
-                          className="symbol-trigger"
-                        >
-                          <span className="truncate">
-                            {activeTicket ? ticketLabel(activeTicket) : "Ticket"}
-                          </span>
-                          <span className={`transition-transform ${symbolMenuOpen ? "rotate-180" : ""}`}>
-                            ▾
-                          </span>
-                        </button>
-                      </div>
-                      <div className="hidden lg:flex lg:max-w-full lg:flex-col lg:items-end lg:gap-2">
-                        <div className="live-badge">
-                          <span className="live-pulse" />
-                          <span>Live</span>
-                        </div>
-                        <div className="desktop-trade-actions">
-                          <a
-                            href={RESALE_URL}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="trade-btn trade-btn-buy"
-                          >
-                            Buy
-                          </a>
-                          <a
-                            href={RESALE_URL}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="trade-btn trade-btn-sell"
-                          >
-                            Sell
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                    {symbolMenuOpen && (
-                      <div className="symbol-menu">
-                        {orderedTicketStates.map(({ key, summary }) => (
-                          <button
-                            key={ticketKey(key)}
-                            type="button"
-                            disabled={summary === null}
-                            onClick={() => {
-                              if (summary === null) {
-                                return;
-                              }
-                              setFocus(key);
-                              setSymbolMenuOpen(false);
-                            }}
-                            className={`symbol-menu-item ${isSameTicket(key, activeTicket) ? "symbol-menu-item-active" : ""
-                              }`}
-                          >
-                            <span>{ticketShortLabel(key)}</span>
-                            {!summary && <span className="symbol-menu-item-meta">N/A</span>}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 flex items-start justify-between gap-4 border-t border-[#1f2630] pt-4 lg:flex-wrap px-4">
-                    <div className="min-w-0 flex-1">
-                      <p className="market-stat-label">Spot price</p>
-                      <div className="mt-1 flex items-end gap-2">
-                        <p className="text-[38px] font-semibold leading-none text-[#f0f4f8]">
-                          {formatPrice(focusOverview.currentPrice)}
-                        </p>
-                        <p
-                          className={`pb-1 text-base font-medium ${activeSummary?.changeRate === null
-                            ? "text-[#848e9c]"
-                            : (activeSummary?.changeRate ?? 0) >= 0
-                              ? "text-[#0ecb81]"
-                              : "text-[#f6465d]"
-                            }`}
-                        >
-                          {formatChange(activeSummary?.changeRate ?? null)}
-                        </p>
-                      </div>
-                      <p className="mt-2 text-sm text-[#848e9c]">
-                        {durationLabel}
-                      </p>
-                    </div>
-
-                    <div className="grid max-w-full flex-shrink-0 grid-cols-2 gap-x-5 gap-y-2 text-sm">
-                      <div>
-                        <p className="market-stat-label">Volume</p>
-                        <p className="market-stat-value">
-                          {activeSummary?.latestVolume?.toLocaleString() ?? "—"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="market-stat-label">Avg</p>
-                        <p className="market-stat-value">{formatPrice(focusOverview.averagePrice)}</p>
-                      </div>
-                      <div>
-                        <p className="market-stat-label">High</p>
-                        <p className="market-stat-value">{formatPrice(focusOverview.highestPrice)}</p>
-                      </div>
-                      <div>
-                        <p className="market-stat-label">Low</p>
-                        <p className="market-stat-value">{formatPrice(focusOverview.lowestPrice)}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </header>
-
-              <section className="detail-toolbar">
-                <div className="detail-toolbar-inner">
-                  <div className="detail-toolbar-row">
-                    <CompactTabs options={INTERVAL_OPTIONS} value={interval} onChange={setInterval} />
-                    <button
-                      type="button"
-                      onClick={() => setMode(mode === "candlestick" ? "line" : "candlestick")}
-                      className="micro-toggle"
-                    >
-                      {mode === "candlestick" ? "Candles" : "Line"}
-                    </button>
-                  </div>
-                </div>
-              </section>
-
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <PriceChart
-                  mode={mode}
-                  interval={interval}
-                  loading={loading}
-                  visibleSeries={detailSeries}
-                  activeTicket={activeTicket}
-                  activeLinePoints={activeLinePoints}
-                  activeCandles={activeCandles}
-                  heightClassName="h-[320px] sm:h-[360px] lg:h-[min(62vh,560px)]"
-                />
-              </div>
+              <TicketDetailPane
+                layout="desktop"
+                loading={loading}
+                lastCapturedAt={lastCapturedAt}
+                activeTicket={activeTicket}
+                activeSummary={activeSummary}
+                focusOverview={focusOverview}
+                durationLabel={durationLabel}
+                symbolMenuOpen={symbolMenuOpen}
+                orderedTicketStates={orderedTicketStates}
+                interval={interval}
+                intervalOptions={INTERVAL_OPTIONS}
+                mode={mode}
+                detailSeries={detailSeries}
+                activeLinePoints={activeLinePoints}
+                activeCandles={activeCandles}
+                resaleUrl={RESALE_URL}
+                onBack={null}
+                onToggleSymbolMenu={() => setSymbolMenuOpen((open) => !open)}
+                onSelectTicket={(ticket) => {
+                  setFocus(ticket);
+                  setSymbolMenuOpen(false);
+                }}
+                onIntervalChange={setInterval}
+                onToggleMode={() => setMode(mode === "candlestick" ? "line" : "candlestick")}
+                formatPrice={formatPrice}
+                formatChange={formatChange}
+              />
 
               <footer className="market-footer hidden lg:flex">
                 <span className="footer-disclaimer">{footerDisclaimer}</span>
@@ -460,150 +318,34 @@ export default function App() {
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-col animate-rise">
-            <header className="detail-header">
-              <div className="flex items-center gap-3 px-4 pt-4">
-                <button type="button" onClick={() => setViewMode("market")} className="back-button">
-                  ←
-                </button>
-                <div className="relative min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="market-kicker">
-                      Updated {lastCapturedAt ? formatDateTime(lastCapturedAt) : "—"}</p>
-                    <div className="live-badge">
-                      <span className="live-pulse" />
-                      <span>Live</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSymbolMenuOpen((open) => !open)}
-                    className="symbol-trigger"
-                  >
-                    <span className="truncate">
-                      {activeTicket ? ticketLabel(activeTicket) : "Ticket"}
-                    </span>
-                    <span className={`transition-transform ${symbolMenuOpen ? "rotate-180" : ""}`}>
-                      ▾
-                    </span>
-                  </button>
-                  {symbolMenuOpen && (
-                    <div className="symbol-menu">
-                      {orderedTicketStates.map(({ key, summary }) => (
-                        <button
-                          key={ticketKey(key)}
-                          type="button"
-                          disabled={summary === null}
-                          onClick={() => {
-                            if (summary === null) {
-                              return;
-                            }
-                            setFocus(key);
-                            setSymbolMenuOpen(false);
-                          }}
-                          className={`symbol-menu-item ${isSameTicket(key, activeTicket) ? "symbol-menu-item-active" : ""
-                            }`}
-                        >
-                          <span>{ticketShortLabel(key)}</span>
-                          {!summary && <span className="symbol-menu-item-meta">N/A</span>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-start justify-between gap-4 border-t border-[#1f2630] p-4">
-                <div className="min-w-0">
-                  <p className="market-stat-label">Spot price</p>
-                  <div className="mt-1 flex items-end gap-2">
-                    <p className="text-[34px] font-semibold leading-none text-[#f0f4f8] sm:text-[44px]">
-                      {formatPrice(focusOverview.currentPrice)}
-                    </p>
-                    <p
-                      className={`pb-1 text-base font-medium text-sm sm:text-lg ${activeSummary?.changeRate === null
-                        ? "text-[#848e9c]"
-                        : (activeSummary?.changeRate ?? 0) >= 0
-                          ? "text-[#0ecb81]"
-                          : "text-[#f6465d]"
-                        }`}
-                    >
-                      {formatChange(activeSummary?.changeRate ?? null)}
-                    </p>
-                  </div>
-                  <p className="mt-2 text-sm text-[#848e9c]">
-                    {durationLabel}
-                  </p>
-                </div>
-
-                <div className="grid flex-shrink-0 grid-cols-2 gap-x-5 gap-y-2 text-sm">
-                  <div>
-                    <p className="market-stat-label">Volume</p>
-                    <p className="market-stat-value">
-                      {activeSummary?.latestVolume?.toLocaleString() ?? "—"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="market-stat-label">Avg</p>
-                    <p className="market-stat-value">{formatPrice(focusOverview.averagePrice)}</p>
-                  </div>
-                  <div>
-                    <p className="market-stat-label">High</p>
-                    <p className="market-stat-value">{formatPrice(focusOverview.highestPrice)}</p>
-                  </div>
-                  <div>
-                    <p className="market-stat-label">Low</p>
-                    <p className="market-stat-value">{formatPrice(focusOverview.lowestPrice)}</p>
-                  </div>
-                </div>
-              </div>
-            </header>
-
-            <section className="detail-toolbar">
-              <div className="detail-toolbar-inner">
-                <div className="detail-toolbar-row">
-                  <CompactTabs options={INTERVAL_OPTIONS} value={interval} onChange={setInterval} />
-                  <button
-                    type="button"
-                    onClick={() => setMode(mode === "candlestick" ? "line" : "candlestick")}
-                    className="micro-toggle"
-                  >
-                    {mode === "candlestick" ? "Candles" : "Line"}
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <div className="flex-1 min-h-[220px] sm:min-h-[260px]">
-              <PriceChart
-                mode={mode}
-                interval={interval}
-                loading={loading}
-                visibleSeries={detailSeries}
-                activeTicket={activeTicket}
-                activeLinePoints={activeLinePoints}
-                activeCandles={activeCandles}
-                heightClassName="h-full"
-              />
-            </div>
-
-            <section className="trade-actions">
-              <a
-                href={RESALE_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="trade-btn trade-btn-buy"
-              >
-                Buy
-              </a>
-              <a
-                href={RESALE_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="trade-btn trade-btn-sell"
-              >
-                Sell
-              </a>
-            </section>
+            <TicketDetailPane
+              layout="mobile"
+              loading={loading}
+              lastCapturedAt={lastCapturedAt}
+              activeTicket={activeTicket}
+              activeSummary={activeSummary}
+              focusOverview={focusOverview}
+              durationLabel={durationLabel}
+              symbolMenuOpen={symbolMenuOpen}
+              orderedTicketStates={orderedTicketStates}
+              interval={interval}
+              intervalOptions={INTERVAL_OPTIONS}
+              mode={mode}
+              detailSeries={detailSeries}
+              activeLinePoints={activeLinePoints}
+              activeCandles={activeCandles}
+              resaleUrl={RESALE_URL}
+              onBack={() => setViewMode("market")}
+              onToggleSymbolMenu={() => setSymbolMenuOpen((open) => !open)}
+              onSelectTicket={(ticket) => {
+                setFocus(ticket);
+                setSymbolMenuOpen(false);
+              }}
+              onIntervalChange={setInterval}
+              onToggleMode={() => setMode(mode === "candlestick" ? "line" : "candlestick")}
+              formatPrice={formatPrice}
+              formatChange={formatChange}
+            />
 
             <footer className="market-footer hidden gap-2 sm:flex lg:hidden">
               <span className="footer-disclaimer">{footerDisclaimer}</span>
