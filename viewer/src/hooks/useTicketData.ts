@@ -51,6 +51,7 @@ interface UseTicketDataReturn {
 }
 
 const REFRESH_INTERVAL_MS = 2 * 60 * 1000;
+const CHANGE_RATE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function getSeasonBounds(records: BucketedRecord[]): SeasonBounds {
   if (records.length === 0) {
@@ -79,11 +80,11 @@ function buildSummary(records: BucketedRecord[], key: TicketKey): TicketSummary 
   );
   const latest = sorted[sorted.length - 1];
   const latestMs = new Date(latest.bucket_at).getTime();
-  const oneHourAgoMs = latestMs - 60 * 60 * 1000;
+  const previousWindowStartMs = latestMs - CHANGE_RATE_WINDOW_MS;
   const previous =
     [...sorted]
       .reverse()
-      .find((record) => new Date(record.bucket_at).getTime() <= oneHourAgoMs) ?? null;
+      .find((record) => new Date(record.bucket_at).getTime() <= previousWindowStartMs) ?? null;
   const changeRate =
     previous && previous.close > 0
       ? ((latest.close - previous.close) / previous.close) * 100

@@ -64,7 +64,7 @@ AS $$
     MAX(n.offer_price) AS high,
     MIN(n.offer_price) AS low,
     (ARRAY_AGG(n.offer_price ORDER BY n.created_at DESC))[1] AS close,
-    ROUND(AVG(n.offer_volume))::INTEGER AS volume
+    (ARRAY_AGG(n.offer_volume ORDER BY n.created_at DESC))[1]::INTEGER AS volume
   FROM normalized AS n
   GROUP BY n.ticket_level, n.ticket_type, n.bucket_local
   ORDER BY bucket_at DESC;
