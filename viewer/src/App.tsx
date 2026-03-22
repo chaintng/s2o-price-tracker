@@ -17,6 +17,8 @@ import {
 
 type ViewMode = "market" | "detail";
 const RESALE_URL = "https://resale.eventpop.me/e/s2o-2026?utm_source=chaintng-s2o-price-tracker";
+const OFFICIAL_BUY_URL = "https://www.eventpop.me/e/87299?utm_source=chaintng-s2o-price-tracker";
+const OFFICIAL_TICKET_PRICE = 2300;
 
 const INTERVAL_OPTIONS: { label: string; value: Interval }[] = [
   { label: "10m", value: "10m" },
@@ -28,6 +30,12 @@ const TICKET_SECTIONS: { level: TicketLevel; label: string }[] = [
   { level: "vip", label: "VIP" },
   { level: "regular", label: "Regular" },
 ];
+const INITIAL_WINDOW_HOURS_BY_INTERVAL: Record<Interval, number> = {
+  "10m": 6,
+  "1H": 24 * 3,
+  "6H": 24 * 7,
+  "1D": 24 * 30,
+};
 
 function formatPrice(value: number | null): string {
   return value === null ? "—" : `฿${value.toLocaleString()}`;
@@ -182,58 +190,66 @@ export default function App() {
                           .filter(({ key }) => key.level === section.level)
                           .map(({ key, summary }, index) => {
                             const color = TICKET_COLORS[ticketKey(key)] ?? "#f0b90b";
+                            const rowDelay = `${(sectionIndex * 4 + index) * 35}ms`;
+                            const shouldShowOfficialBuy = summary?.latestVolume === null;
+
                             return (
                               <button
                                 key={ticketKey(key)}
                                 type="button"
                                 onClick={() => openDetail(key)}
-                                disabled={summary === null}
-                                className={`ticker-row animate-rise ${summary === null ? "ticker-row-disabled" : ""
-                                  }`}
-                                style={{ animationDelay: `${(sectionIndex * 4 + index) * 35}ms` }}
+                                className="ticker-row animate-rise"
+                                style={{ animationDelay: rowDelay }}
                               >
                                 <div className="flex min-w-0 items-center gap-3">
                                   <span
                                     className="h-2.5 w-2.5 rounded-full"
                                     style={{ backgroundColor: color }}
                                   />
-                                  <p
-                                    className={`text-sm font-medium ${summary ? "text-[#f0f4f8]" : "text-[#5f6b7a]"
-                                      }`}
-                                  >
+                                  <p className="text-sm font-medium text-[#f0f4f8]">
                                     {ticketShortLabel(key)}
                                   </p>
                                 </div>
                                 <div className="text-right">
-                                  <p
-                                    className={`text-sm font-medium ${summary ? "text-[#f0f4f8]" : "text-[#5f6b7a]"
-                                      }`}
-                                  >
-                                    {summary ? formatPrice(summary.latestPrice) : "N/A"}
+                                  <p className="text-sm font-medium text-[#f0f4f8]">
+                                    {shouldShowOfficialBuy
+                                      ? formatPrice(OFFICIAL_TICKET_PRICE)
+                                      : formatPrice(summary?.latestPrice ?? null)}
                                   </p>
                                 </div>
-                                <div className="text-right">
-                                  <p
-                                    className={`text-sm font-medium ${summary ? "text-[#f0f4f8]" : "text-[#5f6b7a]"
-                                      }`}
-                                  >
-                                    {summary ? summary.latestVolume?.toLocaleString() ?? "N/A" : "N/A"}
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <p
-                                    className={`text-sm font-medium ${summary === null
-                                      ? "text-[#5f6b7a]"
-                                      : summary.changeRate === null
+                                {shouldShowOfficialBuy ? (
+                                  <div className="col-span-2 flex justify-end">
+                                    <a
+                                      href={OFFICIAL_BUY_URL}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="ticker-buy-link"
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      Buy Official
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <div className="text-right">
+                                    <p className="text-sm font-medium text-[#f0f4f8]">
+                                      {summary?.latestVolume?.toLocaleString() ?? "N/A"}
+                                    </p>
+                                  </div>
+                                )}
+                                {!shouldShowOfficialBuy ? (
+                                  <div className="text-right">
+                                    <p
+                                      className={`text-sm font-medium ${summary?.changeRate === null
                                         ? "text-[#848e9c]"
-                                        : summary.changeRate >= 0
+                                        : (summary?.changeRate ?? 0) >= 0
                                           ? "text-[#0ecb81]"
                                           : "text-[#f6465d]"
-                                      }`}
-                                  >
-                                    {summary ? formatChange(summary.changeRate) : "N/A"}
-                                  </p>
-                                </div>
+                                        }`}
+                                    >
+                                      {formatChange(summary?.changeRate ?? null)}
+                                    </p>
+                                  </div>
+                                ) : null}
                               </button>
                             );
                           })}
@@ -265,7 +281,7 @@ export default function App() {
                   activeLinePoints={[]}
                   activeCandles={[]}
                   heightClassName="h-[225px] sm:h-[255px] lg:h-[220px]"
-                  initialWindowHours={24}
+                  initialWindowHours={INITIAL_WINDOW_HOURS_BY_INTERVAL[interval]}
                 />
               </section>
 

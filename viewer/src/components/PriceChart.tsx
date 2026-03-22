@@ -80,6 +80,21 @@ function buildTooltipRow(label: string, value: string, color = TEXT): string {
   </div>`;
 }
 
+function getSeriesLabelPriority(seriesName: string): number {
+  const levelPriority = seriesName.startsWith("VIP ") ? 0 : 1;
+  const typePriority = seriesName.includes("All 3 Days")
+    ? 0
+    : seriesName.includes("Day 1")
+      ? 1
+      : seriesName.includes("Day 2")
+        ? 2
+        : seriesName.includes("Day 3")
+          ? 3
+          : 4;
+
+  return levelPriority * 10 + typePriority;
+}
+
 function getDefaultZoomWindow(
   timestamps: number[],
   initialWindowHours: number | null
@@ -155,6 +170,11 @@ function buildLineOption(
             : null;
         const rows = list
           .filter((item) => item.seriesName !== "Focused volume")
+          .sort(
+            (left, right) =>
+              getSeriesLabelPriority(String(left.seriesName ?? "")) -
+              getSeriesLabelPriority(String(right.seriesName ?? ""))
+          )
           .map((item) => {
             const value = Array.isArray(item.value) ? item.value[1] : item.value;
             const label = item.seriesName;

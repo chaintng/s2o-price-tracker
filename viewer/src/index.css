@@ -185,11 +185,15 @@
   }
 
   .ticker-row-disabled {
-    @apply cursor-not-allowed;
+    @apply cursor-default;
   }
 
   .ticker-row-disabled:hover {
     @apply bg-transparent;
+  }
+
+  .ticker-buy-link {
+    @apply inline-flex min-w-[132px] items-center justify-center rounded-lg bg-[#0ecb81] px-4 py-0 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#13d68a];
   }
 
   .symbol-menu-item:disabled {
