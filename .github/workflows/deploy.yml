@@ -37,11 +37,11 @@ jobs:
       - name: Build application
         run: npm run build
 
-      - name: Deploy application
-        run: npm run deploy
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: build-artifact
           path: viewer/dist
+
+      - name: Deploy application
+        run: npm run deploy
