@@ -18,12 +18,15 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: '22'
+        working-directory: viewer
 
     - name: Install dependencies
       run: npm install
+      working-directory: viewer
 
     - name: Build application
       run: npm run build
+      working-directory: viewer
 
     - name: Upload artifact
       uses: actions/upload-artifact@v7
