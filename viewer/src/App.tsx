@@ -18,7 +18,7 @@ import {
 type ViewMode = "market" | "detail";
 const RESALE_URL = "https://resale.eventpop.me/e/s2o-2026?utm_source=chaintng-s2o-price-tracker";
 const OFFICIAL_BUY_URL = "https://www.eventpop.me/e/87299?utm_source=chaintng-s2o-price-tracker";
-const OFFICIAL_TICKET_PRICE = 2300;
+const OFFICIAL_REGULAR_DAY_PASS_TICKET_PRICE = 2500;
 
 const INTERVAL_OPTIONS: { label: string; value: Interval }[] = [
   { label: "10m", value: "10m" },
@@ -213,7 +213,7 @@ export default function App() {
                                 <div className="text-right">
                                   <p className="text-sm font-medium text-[#f0f4f8]">
                                     {shouldShowOfficialBuy
-                                      ? formatPrice(OFFICIAL_TICKET_PRICE)
+                                      ? formatPrice(OFFICIAL_REGULAR_DAY_PASS_TICKET_PRICE)
                                       : formatPrice(summary?.latestPrice ?? null)}
                                   </p>
                                 </div>
