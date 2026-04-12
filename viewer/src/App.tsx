@@ -74,7 +74,6 @@ export default function App() {
   const {
     loading,
     error,
-    hasCurrentYearData,
     lastCapturedAt,
     seasonBounds,
     visibleSeries,
@@ -207,6 +206,7 @@ export default function App() {
                             const color = TICKET_COLORS[ticketKey(key)] ?? "#f0b90b";
                             const rowDelay = `${(sectionIndex * 4 + index) * 35}ms`;
                             const defaultFixedPrice = DEFAULT_FIXED_PRICES[key.level][key.type];
+                            const hasCurrentYearData = (summary?.points ?? 0) > 0;
                             const shouldUseDefaultFixedPrice = !hasCurrentYearData;
                             const shouldShowOfficialBuy =
                               shouldUseDefaultFixedPrice && defaultFixedPrice !== null;

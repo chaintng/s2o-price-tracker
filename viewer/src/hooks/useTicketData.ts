@@ -38,7 +38,6 @@ interface FocusOverview {
 interface UseTicketDataReturn {
   loading: boolean;
   error: string | null;
-  hasCurrentYearData: boolean;
   lastCapturedAt: string | null;
   seasonBounds: SeasonBounds;
   visibleSeries: ChartSeries[];
@@ -163,8 +162,7 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
 
   return useMemo<UseTicketDataReturn>(() => {
     const currentYearBuckets = buckets.filter((bucket) => isCurrentBangkokYear(bucket.bucket_at));
-    const hasCurrentYearData = currentYearBuckets.length > 0;
-    const displayBuckets = hasCurrentYearData ? currentYearBuckets : [];
+    const displayBuckets = currentYearBuckets;
     const seasonBounds = getSeasonBounds(displayBuckets);
     const lastCapturedAt = seasonBounds.end;
     const grouped = new Map<string, BucketedRecord[]>();
@@ -247,7 +245,6 @@ export function useTicketData(options: UseTicketDataOptions): UseTicketDataRetur
     return {
       loading,
       error,
-      hasCurrentYearData,
       lastCapturedAt,
       seasonBounds,
       visibleSeries,
